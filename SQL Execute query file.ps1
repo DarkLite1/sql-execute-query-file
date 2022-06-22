@@ -239,7 +239,7 @@ Process {
 
                 $M = "Task error on '{0}\{1}': {2}" -f 
                 $task.ServerInstance, $task.Database, $e.ToString()
-                Write-Verbose $M; Write-EventLog @EventErrorParams -Message $M
+                Write-Warning $M; Write-EventLog @EventErrorParams -Message $M
             }
 
             if (-not $jobErrors) {
