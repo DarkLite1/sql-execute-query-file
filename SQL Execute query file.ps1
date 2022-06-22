@@ -241,6 +241,11 @@ Process {
                 $task.ServerInstance, $task.Database, $e.ToString()
                 Write-Verbose $M; Write-EventLog @EventErrorParams -Message $M
             }
+
+            if (-not $jobErrors) {
+                $M = 'No job errors'
+                Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+            }
         }
         #endregion
 
