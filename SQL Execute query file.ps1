@@ -330,24 +330,24 @@ End {
         }
         #endregion
 
-        $summaryHtmlList = "
+        $summaryTable = "
         <table>
             <tr>
                 <th>Total queries</th>
                 <td>$($counter.queriesTotal)</td>
-            <tr>
+            </tr>
             <tr>
                 <th>Executed queries</th>
                 <td>$($counter.queriesExecuted)</td>
-            <tr>
+            </tr>
             <tr>
                 <th>Not executed queries</th>
                 <td>$($counter.queriesTotal - $counter.queriesExecuted)</td>
-            <tr>
+            </tr>
             <tr>
                 <th>Failed queries</th>
                 <td>$($counter.queryErrors)</td>
-            <tr>
+            </tr>
         </table>
         "
         
@@ -357,7 +357,7 @@ End {
             Message   = "
                 $systemErrorsHtmlList
                 <p>Summary:</p>
-                $summaryHtmlList"
+                $summaryTable"
             LogFolder = $LogParams.LogFolder
             Header    = $ScriptName
             Save      = $LogFile + ' - Mail.html'
