@@ -324,11 +324,25 @@ Process {
             
             $task.Job = Start-Job @invokeParams
             
+            #region Wait for max running jobs
             $waitParams = @{
                 Name       = $tasksToExecute.Job | Where-Object { $_ }
                 MaxThreads = $MaxConcurrentJobs
             }
             Wait-MaxRunningJobsHC @waitParams
+            #endregion
+
+            #region Get job results
+            foreach (
+                $completedTask in 
+                $tasksToExecute | Where-Object {
+                    ($_.Job) -and
+                    ($_.Job.State -match 'Completed|Failed')
+                }
+            ) {
+                & $getJobResult
+            }
+            #endregion
         }
         #endregion
 
