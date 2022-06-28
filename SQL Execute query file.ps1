@@ -43,6 +43,82 @@ Param (
 )
 
 Begin {
+    Function Get-JobDurationHC {
+        [OutputType([TimeSpan])]
+        Param (
+            [Parameter(Mandatory)]
+            [System.Management.Automation.Job]$Job,
+            [Parameter(Mandatory)]
+            [String]$ComputerName
+        )
+
+        $params = @{
+            Start = $Job.PSBeginTime
+            End   = $Job.PSEndTime
+        }
+        $jobDuration = New-TimeSpan @params
+
+        $M = "'{0}' {2} job duration '{1:hh}:{1:mm}:{1:ss}'" -f 
+        $ComputerName, $jobDuration, $Job.Name
+        Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+      
+        $jobDuration
+    }
+    Function Get-JobResultsAndErrorsHC {
+        [OutputType([PSCustomObject])]
+        Param (
+            [Parameter(Mandatory)]
+            [System.Management.Automation.Job]$Job,
+            [Parameter(Mandatory)]
+            [String]$ComputerName
+        )
+
+        $result = [PSCustomObject]@{
+            Result = $null
+            Errors = @()
+        }
+
+        #region Get job results
+        $M = "'{0}' {1} job get results" -f $ComputerName, $Job.Name
+        Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+              
+        $jobErrors = @()
+        $receiveParams = @{
+            ErrorVariable = 'jobErrors'
+            ErrorAction   = 'SilentlyContinue'
+        }
+        $result.Result = $Job | Receive-Job @receiveParams
+        #endregion
+   
+        #region Get job errors
+        foreach ($e in $jobErrors) {
+            $M = "'{0}' {1} job error '{2}'" -f 
+            $ComputerName, $Job.Name , $e.ToString()
+            Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
+                  
+            $result.Errors += $M
+            $error.Remove($e)
+        }
+        if ($result.Result.Error) {
+            $M = "'{0}' {1} error '{2}'" -f 
+            $ComputerName, $Job.Name, $result.Result.Error
+            Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
+   
+            $result.Errors += $M
+        }
+        #endregion
+
+        $result.Result = $result.Result | 
+        Select-Object -Property * -ExcludeProperty 'Error'
+
+        if (-not $result.Errors) {
+            $M = "'{0}' {1} job successful" -f 
+            $ComputerName, $Job.Name, $result.Result.Error
+            Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+        }
+
+        $result
+    }
     $scriptBlock = {
         Param (
             [Parameter(Mandatory)]
@@ -97,6 +173,8 @@ Begin {
         Get-ScriptRuntimeHC -Start
 
         $error.Clear()
+        
+        Get-Job | Remove-Job -Force -EA Ignore
 
         #region Logging
         try {
