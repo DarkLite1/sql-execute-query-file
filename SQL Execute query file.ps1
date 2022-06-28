@@ -319,7 +319,7 @@ Process {
 
             $M = "'{0}\{1}' Execute '{2}' .SQL files" -f 
             $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
-            ($task.QueryFiles).Count
+            ($task.Queries).Count
             Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
             
             $task.Job = Start-Job @invokeParams
