@@ -16,4 +16,4 @@ A scheduled task can be created to run the script in an automated way.
 - Read the [help section](SQL%20Execute%20query%20file.ps1) in the script for an explanation of the input file parameters.
 
 # Requirements
-All required modules can be found in the [repository](https://github.com/DarkLite1?tab=repositories) and are free to use and download.
+All required modules can be found in the [repository](https://github.com/DarkLite1?tab=repositories) and are free to use.
