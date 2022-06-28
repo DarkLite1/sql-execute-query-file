@@ -58,8 +58,8 @@ Begin {
         }
         $jobDuration = New-TimeSpan @params
 
-        $M = "'{0}' {2} job duration '{1:hh}:{1:mm}:{1:ss}'" -f 
-        $ComputerName, $jobDuration, $Job.Name
+        $M = "'{0}' job duration '{1:hh}:{1:mm}:{1:ss}'" -f 
+        $ComputerName, $jobDuration
         Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
       
         $jobDuration
@@ -79,7 +79,7 @@ Begin {
         }
 
         #region Get job results
-        $M = "'{0}' {1} job get results" -f $ComputerName, $Job.Name
+        $M = "'{0}' get job results" -f $ComputerName
         Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
               
         $jobErrors = @()
@@ -91,29 +91,27 @@ Begin {
         #endregion
    
         #region Get job errors
+        $jobErrorsFound = $false
+
         foreach ($e in $jobErrors) {
-            $M = "'{0}' {1} job error '{2}'" -f 
-            $ComputerName, $Job.Name , $e.ToString()
+            $jobErrorsFound = $true
+
+            $M = "'{0}' job error '{1}'" -f $ComputerName, $e.ToString()
             Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
                   
             $result.Errors += $M
             $error.Remove($e)
         }
-        if ($result.Result.Error) {
-            $M = "'{0}' {1} error '{2}'" -f 
-            $ComputerName, $Job.Name, $result.Result.Error
+        foreach ($e in $result.Result.Error | Where-Object { $_ }) {
+            $jobErrorsFound = $true
+
+            $M = "'{0}' error '{1}'" -f $ComputerName, $e
             Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
-   
-            $result.Errors += $M
         }
         #endregion
 
-        $result.Result = $result.Result | 
-        Select-Object -Property * -ExcludeProperty 'Error'
-
-        if (-not $result.Errors) {
-            $M = "'{0}' {1} job successful" -f 
-            $ComputerName, $Job.Name, $result.Result.Error
+        if (-not $jobErrorsFound) {
+            $M = "'{0}' job successful" -f $ComputerName
             Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
         }
 
@@ -166,6 +164,28 @@ Begin {
             }
         }
     }
+    $getJobResult = {
+        #region Get job results
+        $params = @{
+            Job          = $completedTask.Job
+            ComputerName = '{0}\{1}' -f $completedTask.ServerInstance, 
+            $completedTask.Database
+        }
+        $jobOutput = Get-JobResultsAndErrorsHC @params
+
+        $completedTask.JobDuration = Get-JobDurationHC @params
+        #endregion
+
+        #region Add job results
+        $completedTask.JobResults += $jobOutput.Result
+
+        $jobOutput.Errors | ForEach-Object { 
+            $completedTask.JobErrors += $_ 
+        }
+        #endregion
+            
+        $completedTask.Job = $null
+    }
 
     try {
         Import-EventLogParamsHC -Source $ScriptName
@@ -173,7 +193,7 @@ Begin {
         Get-ScriptRuntimeHC -Start
 
         $error.Clear()
-        
+
         Get-Job | Remove-Job -Force -EA Ignore
 
         #region Logging
@@ -259,6 +279,7 @@ Begin {
                         QueryFiles     = @($task.QueryFile)
                         Queries        = @($queries)
                         Job            = $null
+                        JobDuration    = $null
                         JobResults     = @()
                         JobErrors      = @()
                     }
@@ -302,35 +323,28 @@ Process {
         }
         #endregion
 
-        #region Wait for jobs to finish
-        $M = "Wait for all $($tasksToExecute.count) jobs to finish"
-        Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-
-        $null = $tasksToExecute.Job | Wait-Job
-        #endregion
-
-        #region Get job results and job errors
-        foreach ($task in $tasksToExecute) {
-            $jobErrors = @()
-            $receiveParams = @{
-                ErrorVariable = 'jobErrors'
-                ErrorAction   = 'SilentlyContinue'
+        #region Wait for jobs to finish and get results
+        while (
+            $runningTasks = $tasksToExecute | Where-Object { $_.Job }
+        ) {
+            #region Verbose progress
+            $runningJobCounter = ($runningTasks | Measure-Object).Count
+            if ($runningJobCounter -eq 1) {
+                $M = 'Wait for the last running job to finish'
             }
-            $task.JobResults += $task.Job | Receive-Job @receiveParams
-
-            foreach ($e in $jobErrors) {
-                $task.JobErrors += $e.ToString()
-                $Error.Remove($e)
-
-                $M = "Task error on '{0}\{1}': {2}" -f 
-                $task.ServerInstance, $task.Database, $e.ToString()
-                Write-Warning $M; Write-EventLog @EventErrorParams -Message $M
+            else {
+                $M = "Wait for one of '{0}' running jobs to finish" -f $runningJobCounter
             }
+            Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+            #endregion
 
-            if (-not $jobErrors) {
-                $M = 'No job errors'
-                Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+            $finishedJob = $runningTasks.Job | Wait-Job -Any
+        
+            $completedTask = $runningTasks | Where-Object {
+                $_.Job.Id -eq $finishedJob.Id
             }
+        
+            & $getJobResult
         }
         #endregion
 

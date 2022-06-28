@@ -471,7 +471,7 @@ Describe 'when all tests pass' {
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
             }
-        }
+        } -Tag test
     }
     It 'send a summary mail to the user' {
         Should -Invoke Send-MailHC -Exactly 1 -Scope Describe -ParameterFilter {
