@@ -192,7 +192,7 @@ Describe 'send an e-mail to the admin when' {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'QueryFile path not of extension .txt or .sql' {
+            It 'QueryFile path not of extension .sql' {
                 $testFileInvalid = (New-Item 'TestDrive:/query.xxx' -ItemType File).FullName
                 @{
                     MailTo             = 'bob@contoso.com'
@@ -209,7 +209,7 @@ Describe 'send an e-mail to the admin when' {
                 .$testScript @testParams
                 
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file '$testFileInvalid' is not supported, only extensions '.txt' or '.sql' are supported*")
+                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file '$testFileInvalid' is not supported, only the extension '.sql' is supported*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'

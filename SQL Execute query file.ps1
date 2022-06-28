@@ -160,8 +160,8 @@ Begin {
                 if (-not (Test-Path -LiteralPath $q -PathType Leaf)) {
                     throw "Input file '$ImportFile': Query file '$q' not found for the task on '$($task.ComputerName)'."
                 }
-                if ($q -notMatch '.sql$|.txt$') {
-                    throw "Input file '$ImportFile': Query file '$q' is not supported, only extensions '.txt' or '.sql' are supported."
+                if ($q -notMatch '.sql$') {
+                    throw "Input file '$ImportFile': Query file '$q' is not supported, only the extension '.sql' is supported."
                 }
             }
         }
@@ -209,7 +209,7 @@ Process {
                 $task.Queries, $task.QueryFiles
             }
 
-            $M = "Start job for server instance '{0}' database '{1}' queries '{2}''" -f 
+            $M = "'{0}\{1}' Execute '{2}' .SQL files" -f 
             $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
             ($task.Queries).Count
             Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
