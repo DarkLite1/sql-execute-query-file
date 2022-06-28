@@ -157,12 +157,12 @@ Begin {
                     $result.Executed = $true
 
                     $duration = New-TimeSpan -Start $startDate -End (Get-Date)
-                    $result.Duration = '{1:hh}:{1:mm}:{1:ss}' -f $duration
+                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}' -f $duration
                 }
             }
             catch {
                 $duration = New-TimeSpan -Start $startDate -End (Get-Date)
-                $result.Duration = '{1:hh}:{1:mm}:{1:ss}' -f $duration
+                $result.Duration = '{0:hh}:{0:mm}:{0:ss}' -f $duration
                     
                 $result.Error = $_
                 $global:error.RemoveAt(0)
