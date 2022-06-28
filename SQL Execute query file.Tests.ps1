@@ -1,5 +1,5 @@
-#Requires -Modules Pester, ImportExcel
 #Requires -Version 5.1
+#Requires -Modules Pester, ImportExcel
 
 BeforeAll {
     $realStartJobCommand = Get-Command Start-Job
