@@ -117,7 +117,7 @@ Begin {
 
         $result
     }
-    $scriptBlock = {
+    $executeQueryFiles = {
         Param (
             [Parameter(Mandatory)]
             [String]$ServerInstance,
@@ -137,11 +137,14 @@ Begin {
                     DatabaseName = $database
                     QueryFile    = $QueryFiles[$i]
                     Executed     = $false
+                    Duration     = $null
                     Error        = $null
                     Output       = @()
                 }
 
                 if (-not $result.Error) {
+                    $startDate = Get-Date
+
                     $params = @{
                         ServerInstance    = $ServerInstance
                         Database          = $database
@@ -152,9 +155,15 @@ Begin {
                     }
                     $result.Output += Invoke-Sqlcmd @params
                     $result.Executed = $true
+
+                    $duration = New-TimeSpan -Start $startDate -End (Get-Date)
+                    $result.Duration = '{1:hh}:{1:mm}:{1:ss}' -f $duration
                 }
             }
             catch {
+                $duration = New-TimeSpan -Start $startDate -End (Get-Date)
+                $result.Duration = '{1:hh}:{1:mm}:{1:ss}' -f $duration
+                    
                 $result.Error = $_
                 $global:error.RemoveAt(0)
             }
@@ -303,7 +312,7 @@ Process {
         #region Start jobs to execute queries
         foreach ($task in $tasksToExecute) {
             $invokeParams = @{
-                ScriptBlock  = $scriptBlock
+                ScriptBlock  = $executeQueryFiles
                 ArgumentList = $task.ServerInstance, $task.Database,
                 $task.Queries, $task.QueryFiles
             }
