@@ -1,5 +1,6 @@
 #Requires -Version 5.1
-#Requires -Modules ImportExcel, Toolbox.HTML, Toolbox.Remoting, Toolbox.EventLog
+#Requires -Modules SqlServer, ImportExcel
+#Requires -Modules Toolbox.HTML, Toolbox.Remoting, Toolbox.EventLog
 
 <#
 .SYNOPSIS

@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+#Requires -Modules Pester, ImportExcel
 #Requires -Version 5.1
 
 BeforeAll {
