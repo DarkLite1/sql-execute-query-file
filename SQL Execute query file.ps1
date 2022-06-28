@@ -6,23 +6,29 @@
     Execute SQL queries
 
 .DESCRIPTION
-    This script reads a .JSON input file that contains all the information
-    required to run SQL queries.
+    This script reads a .JSON input file that contains all the parameters
+    required to execute the .SQL files.
+
+    The files are executed in order and when one file fails the next ones are
+    simply not executed and marked as 'Executed = false'. Success and the reason
+    for failure are reported in an Excel file that is sent by e-mail.
 
 .PARAMETER MaxConcurrentTasks
-    How many tasks can be running at the same time.
+    How many tasks are allowed to run at the same time.
 
 .PARAMETER Tasks
-    Collection of tasks to executed
+    Collection of tasks to executed.
 
 .PARAMETER Tasks.ComputerName
-    Computer name where the SQL database is hosted
+    Computer name where the SQL database is hosted.
 
 .PARAMETER Tasks.DatabaseName
-    Name of the database located on the server instance
+    Name of the database located on the server instance. In case multiple 
+    databases need to be addressed use 'MASTER' and the 'USE database x' 
+    statement within the .SQL file(s).
 
-.PARAMETER Tasks.Query
-    The queries to execute against the databases on the server instances
+.PARAMETER Tasks.QueryFile
+    The .SQL file containing the SQL statements to execute.
 #>
 
 [CmdLetBinding()]
