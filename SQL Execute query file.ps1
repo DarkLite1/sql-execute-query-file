@@ -277,13 +277,13 @@ Begin {
         #region Create a list of tasks to execute
         $tasksToExecute = foreach ($task in $Tasks) {
             $queries = foreach ($queryFile in $task.QueryFile) {
-                $queryFileContent = Get-Content -LiteralPath $queryFile -Raw -EA Stop
+                $fileContent = Get-Content -LiteralPath $queryFile -Raw -EA Stop
 
-                if (-not $queryFileContent) {
+                if (-not $fileContent) {
                     throw "No file content in query file '$queryFile'"
                 }
 
-                $queryFileContent
+                $fileContent
             }
 
             foreach ($computerName in $task.ComputerName) {
