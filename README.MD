@@ -14,3 +14,6 @@ A scheduled task can be created to run the script in an automated way.
 # Best practices
 - Use explicit file names for the .SQL files in the .JSON input file that clearly explains what the file does. This will simplify re-using and organizing the different input files.
 - Read the [help section](SQL%20Execute%20query%20file.ps1) in the script for an explanation of the input file parameters.
+
+# Requirements
+All required modules can be found in the [repository](https://github.com/DarkLite1?tab=repositories) and are free to use and download.
