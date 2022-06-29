@@ -292,6 +292,7 @@ Describe 'when all tests pass' {
                 DatabaseName = 'a'
                 QueryFile    = 'c:\query1.sql'
                 Executed     = $true
+                Duration     = '00:00:00:1a1'
                 Error        = 'problem'
             }
             [PSCustomObject]@{
@@ -299,6 +300,7 @@ Describe 'when all tests pass' {
                 DatabaseName = 'a'
                 QueryFile    = 'c:\query2.sql'
                 Executed     = $false
+                Duration     = $null
                 Error        = $null
             }
             [PSCustomObject]@{
@@ -306,6 +308,7 @@ Describe 'when all tests pass' {
                 DatabaseName = 'b'
                 QueryFile    = 'c:\query1.sql'
                 Executed     = $true
+                Duration     = '00:00:00:1b1'
                 Error        = $null
             }
             [PSCustomObject]@{
@@ -313,6 +316,7 @@ Describe 'when all tests pass' {
                 DatabaseName = 'b'
                 QueryFile    = 'c:\query2.sql'
                 Executed     = $true
+                Duration     = '00:00:00:1b2'
                 Error        = $null
             }
             [PSCustomObject]@{
@@ -320,6 +324,7 @@ Describe 'when all tests pass' {
                 DatabaseName = 'a'
                 QueryFile    = 'c:\query1.sql'
                 Executed     = $true
+                Duration     = '00:00:00:2a1'
                 Error        = $null
             }
             [PSCustomObject]@{
@@ -327,24 +332,24 @@ Describe 'when all tests pass' {
                 DatabaseName = 'a'
                 QueryFile    = 'c:\query2.sql'
                 Executed     = $true
+                Duration     = '00:00:00:2a2'
                 Error        = $null
-                # Output       = @()
             }
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
                 QueryFile    = 'c:\query1.sql'
                 Executed     = $true
+                Duration     = '00:00:00:2b1'
                 Error        = $null
-                # Output       = @()
             }
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
                 QueryFile    = 'c:\query2.sql'
                 Executed     = $true
+                Duration     = '00:00:00:2b2'
                 Error        = $null
-                # Output       = @()
             }
         )
 
@@ -356,6 +361,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'a'
                         QueryFile    = 'c:\query1.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:1a1'
                         Error        = 'problem'
                     }
                     [PSCustomObject]@{
@@ -363,6 +369,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'a'
                         QueryFile    = 'c:\query2.sql'
                         Executed     = $false
+                        Duration     = $null
                         Error        = $null
                     }
                 )
@@ -379,6 +386,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'a'
                         QueryFile    = 'c:\query1.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:2a1'
                         Error        = $null
                     }
                     [PSCustomObject]@{
@@ -386,6 +394,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'a'
                         QueryFile    = 'c:\query2.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:2a2'
                         Error        = $null
                     }
                 )
@@ -402,6 +411,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'b'
                         QueryFile    = 'c:\query1.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:1b1'
                         Error        = $null
                     }
                     [PSCustomObject]@{
@@ -409,6 +419,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'b'
                         QueryFile    = 'c:\query2.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:1b2'
                         Error        = $null
                     }
                 )
@@ -425,6 +436,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'b'
                         QueryFile    = 'c:\query1.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:2b1'
                         Error        = $null
                     }
                     [PSCustomObject]@{
@@ -432,6 +444,7 @@ Describe 'when all tests pass' {
                         DatabaseName = 'b'
                         QueryFile    = 'c:\query2.sql'
                         Executed     = $true
+                        Duration     = '00:00:00:2b2'
                         Error        = $null
                     }
                 )
@@ -490,6 +503,7 @@ Describe 'when all tests pass' {
                 }
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
+                $actualRow.Duration | Should -Be $testRow.Duration
             }
         }
     }
