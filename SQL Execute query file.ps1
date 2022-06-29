@@ -165,7 +165,7 @@ Begin {
                 (New-TimeSpan -Start $startDate -End (Get-Date))
                     
                 $result.Error = $_
-                $global:error.RemoveAt(0)
+                $error.RemoveAt(0)
             }
             finally {
                 $i++
