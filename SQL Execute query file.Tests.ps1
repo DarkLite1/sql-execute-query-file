@@ -251,6 +251,26 @@ Describe 'send an e-mail to the admin when' {
             }
         }
     }
+    It 'a .SQL file is empty' {
+        @{
+            MailTo             = 'bob@contoso.com'
+            MaxConcurrentTasks = 1
+            Tasks              = @(
+                @{
+                    ComputerName = @('PC1')
+                    DatabaseName = @('a')
+                    QueryFile    = (New-Item -Path 'TestDrive:\file.sql' -ItemType File).FullName
+                }
+            )
+        } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
+        
+        .$testScript @testParams
+
+        Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
+            (&$MailAdminParams) -and 
+            ($Message -like "*No file content in query file '*\file.sql'*")
+        }
+    }
 }
 Describe 'when all tests pass' {
     BeforeAll {
@@ -471,7 +491,7 @@ Describe 'when all tests pass' {
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
             }
-        } -Tag test
+        }
     }
     It 'send a summary mail to the user' {
         Should -Invoke Send-MailHC -Exactly 1 -Scope Describe -ParameterFilter {
