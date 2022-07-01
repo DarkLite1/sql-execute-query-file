@@ -411,7 +411,7 @@ Process {
                 }
             },
             @{
-                Name       = 'JobErrors';
+                Name       = 'Error';
                 Expression = {
                     $_.JobErrors -join ', '
                 }
@@ -437,7 +437,7 @@ End {
         #region Count results, errors, ...
         $counter = @{
             queriesTotal    = (
-                $jobResults | Measure-Object
+                $tasksToExecute.QueryFiles | Measure-Object
             ).Count
             queriesExecuted = (
                 $jobResults | Where-Object { $_.Executed } | Measure-Object
@@ -458,7 +458,7 @@ End {
         $mailParams.Priority = 'Normal'
 
         $mailParams.Subject = '{0} {1}' -f $counter.queriesTotal, $(
-            if ($counter.queriesTotal -gt 1) { 'queries' } else { 'query' }
+            if ($counter.queriesTotal -eq 1) { 'query' } else { 'queries' }
         )
 
         if (
@@ -503,8 +503,16 @@ End {
                 <th>Failed queries</th>
                 <td>$($counter.queryErrors)</td>
             </tr>
+            {0}
         </table>
-        "
+        " -f $(
+            if ($counter.JobErrors) {
+                "<tr>
+                    <th>Job errors</th>
+                    <td>$($counter.JobErrors)</td>
+                </tr>"
+            }
+        )
         
         $mailParams += @{
             To        = $MailTo
@@ -523,6 +531,9 @@ End {
             "<p><i>* Check the attachment for details</i></p>"
         }
    
+        Write-Verbose "$($mailParams.Subject)"
+        Write-Verbose "$($mailParams.Message)"
+
         Get-ScriptRuntimeHC -Stop
         Send-MailHC @mailParams
         #endregion

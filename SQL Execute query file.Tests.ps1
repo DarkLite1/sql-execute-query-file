@@ -767,3 +767,84 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
         }
     }
 } 
+Describe 'when a job fails' {
+    BeforeAll {
+        @{
+            MailTo             = 'bob@contoso.com'
+            MaxConcurrentTasks = 6
+            Tasks              = @(
+                @{
+                    ComputerName = @('PC1')
+                    DatabaseName = @('a')
+                    QueryFile    = $testQueryPaths
+                }
+            )
+        } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
+        
+        $testExportedExcelRows = @(
+            [PSCustomObject]@{
+                ComputerName = 'PC1'
+                DatabaseName = 'a'
+                QueryFiles   = $testQueryPaths.Count
+                Error        = "'PC1\a' job error 'oops'"
+            }
+        )
+
+        Mock Start-Job -MockWith { 
+            & $realStartJobCommand -Scriptblock { 
+                throw 'oops'
+            }
+        }
+
+        .$testScript @testParams
+    }
+    It 'Start-Job is called' {
+        Should -Invoke Start-Job -Times 1 -Exactly -Scope Describe -ParameterFilter {
+            ($ScriptBlock) -and
+            ($ArgumentList[0] -eq 'PC1') -and
+            ($ArgumentList[1] -eq 'a') -and
+            ($ArgumentList[2].Count -eq 2)
+        }
+        Should -Invoke Start-Job -Times 1 -Exactly -Scope Describe
+    } 
+    Context 'export errors to an Excel file' {
+        BeforeAll {
+            $testExcelLogFile = Get-ChildItem $testParams.LogFolder -File -Recurse -Filter '*.xlsx'
+
+            { 
+                Import-Excel -Path $testExcelLogFile.FullName -WorksheetName 'Overview'
+            } | Should -Throw
+
+            $actual = Import-Excel -Path $testExcelLogFile.FullName -WorksheetName 'JobErrors' -EA Ignore
+        }
+        It 'to the log folder' {
+            $testExcelLogFile | Should -Not -BeNullOrEmpty
+        }
+        It 'with the correct total rows' {
+            $actual | Should -HaveCount $testExportedExcelRows.Count
+        }
+        It 'with the correct data in the rows' {
+            foreach ($testRow in $testExportedExcelRows) {
+                $actualRow = $actual | Where-Object {
+                    ($_.ComputerName -eq $testRow.ComputerName) -and
+                    ($_.DatabaseName -eq $testRow.DatabaseName) -and
+                    ($_.QueryFile -eq $testRow.QueryFile)
+                }
+                $actualRow.Executed | Should -Be $testRow.Executed
+                $actualRow.Error | Should -Be $testRow.Error
+                $actualRow.Duration | Should -Be $testRow.Duration
+            }
+        }
+    }
+    It 'send a summary mail to the user' {
+        Should -Invoke Send-MailHC -Exactly 1 -Scope Describe -ParameterFilter {
+            ($To -eq 'bob@contoso.com') -and
+            ($Bcc -eq $ScriptAdmin) -and
+            ($Priority -eq 'High') -and
+            ($Subject -eq '2 queries, 1 error') -and
+            ($Attachments.Count -eq 1) -and
+            ($Attachments -like '* - Log.xlsx') -and
+            ($Message -like "*<th>Total queries</th>*<td>2</td>*<th>Executed queries</th>*<td>0</td>*<th>Not executed queries</th>*<td>2</td>*<th>Failed queries</th>*<td>0</td>*<th>Job errors</th>*<td>1</td>*<p><i>* Check the attachment for details</i></p>*")
+        }
+    } -tag test
+}
