@@ -356,9 +356,6 @@ Process {
 
         #region Export job results to Excel file
         if ($jobResults = $tasksToExecute.JobResults | Where-Object { $_ }) {
-            $M = "Export $($jobResults.Count) rows to Excel"
-            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-            
             $excelParams = @{
                 Path               = $logFile + ' - Log.xlsx'
                 WorksheetName      = 'Overview'
@@ -367,6 +364,10 @@ Process {
                 AutoSize           = $true
                 FreezeTopRow       = $true
             }
+
+            $M = "Export $($jobResults.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
+            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
+
             $jobResults | 
             Select-Object -Property * -ExcludeProperty 'PSComputerName',
             'RunSpaceId', 'PSShowComputerName', 'Output' | 
@@ -378,9 +379,6 @@ Process {
 
         #region Export job errors to Excel file
         if ($jobErrors = $tasksToExecute | Where-Object { $_.JobErrors }) {
-            $M = "Export $($jobResults.Count) rows to Excel sheet ''"
-            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-            
             $excelParams = @{
                 Path               = $logFile + ' - Log.xlsx'
                 WorksheetName      = 'JobErrors'
@@ -389,6 +387,10 @@ Process {
                 AutoSize           = $true
                 FreezeTopRow       = $true
             }
+
+            $M = "Export $($jobErrors.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
+            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
+
             $jobErrors | 
             Select-Object -Property @{
                 Name       = 'ComputerName';
