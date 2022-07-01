@@ -530,9 +530,6 @@ End {
             $mailParams.Message += 
             "<p><i>* Check the attachment for details</i></p>"
         }
-   
-        Write-Verbose "$($mailParams.Subject)"
-        Write-Verbose "$($mailParams.Message)"
 
         Get-ScriptRuntimeHC -Stop
         Send-MailHC @mailParams
