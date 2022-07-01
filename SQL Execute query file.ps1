@@ -436,7 +436,9 @@ End {
 
         #region Count results, errors, ...
         $counter = @{
-            queriesTotal    = ($jobResults | Measure-Object).Count
+            queriesTotal    = (
+                $jobResults | Measure-Object
+            ).Count
             queriesExecuted = (
                 $jobResults | Where-Object { $_.Executed } | Measure-Object
             ).Count
@@ -444,9 +446,11 @@ End {
                 $jobResults | Where-Object { $_.Error } | Measure-Object
             ).Count
             jobErrors       = (
-                $tasksToExecute | Where-Object { $_.JobErrors } | Measure-Object
+                $jobErrors | Measure-Object
             ).Count
-            systemErrors    = ($Error.Exception.Message | Measure-Object).Count
+            systemErrors    = (
+                $Error.Exception.Message | Measure-Object
+            ).Count
         }
         #endregion
 
