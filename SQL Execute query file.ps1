@@ -43,27 +43,6 @@ Param (
 )
 
 Begin {
-    Function Get-JobDurationHC {
-        [OutputType([TimeSpan])]
-        Param (
-            [Parameter(Mandatory)]
-            [System.Management.Automation.Job]$Job,
-            [Parameter(Mandatory)]
-            [String]$ComputerName
-        )
-
-        $params = @{
-            Start = $Job.PSBeginTime
-            End   = $Job.PSEndTime
-        }
-        $jobDuration = New-TimeSpan @params
-
-        $M = "'{0}' job duration '{1:hh}:{1:mm}:{1:ss}:{1:fff}'" -f 
-        $ComputerName, $jobDuration
-        Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-      
-        $jobDuration
-    }
     Function Get-JobResultsAndErrorsHC {
         [OutputType([PSCustomObject])]
         Param (
@@ -181,8 +160,6 @@ Begin {
             $completedTask.Database
         }
         $jobOutput = Get-JobResultsAndErrorsHC @params
-
-        $completedTask.JobDuration = Get-JobDurationHC @params
         #endregion
 
         #region Add job results
@@ -295,7 +272,6 @@ Begin {
                         QueryFiles     = @($task.QueryFile)
                         Queries        = @($queries)
                         Job            = $null
-                        JobDuration    = $null
                         JobResults     = @()
                         JobErrors      = @()
                     }
