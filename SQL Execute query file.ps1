@@ -375,6 +375,50 @@ Process {
             $mailParams.Attachments = $excelParams.Path
         }
         #endregion
+
+        #region Export job errors to Excel file
+        if ($jobErrors = $tasksToExecute | Where-Object { $_.JobErrors }) {
+            $M = "Export $($jobResults.Count) rows to Excel sheet ''"
+            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
+            
+            $excelParams = @{
+                Path               = $logFile + ' - Log.xlsx'
+                WorksheetName      = 'JobErrors'
+                TableName          = 'JobErrors'
+                NoNumberConversion = '*'
+                AutoSize           = $true
+                FreezeTopRow       = $true
+            }
+            $jobErrors | 
+            Select-Object -Property @{
+                Name       = 'ComputerName';
+                Expression = {
+                    $_.ServerInstance
+                }
+            },
+            @{
+                Name       = 'DatabaseName';
+                Expression = {
+                    $_.Database
+                }
+            },
+            @{
+                Name       = 'QueryFiles';
+                Expression = {
+                    ($_.QueryFiles | Measure-Object).Count
+                }
+            },
+            @{
+                Name       = 'JobErrors';
+                Expression = {
+                    $_.JobErrors -join ', '
+                }
+            } | 
+            Export-Excel @excelParams
+
+            $mailParams.Attachments = $excelParams.Path
+        }
+        #endregion
     }
     Catch {
         Write-Warning $_
