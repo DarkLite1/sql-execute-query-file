@@ -273,6 +273,7 @@ Begin {
             }
         }
         #endregion
+        #endregion
 
         #region Create a list of tasks to execute
         $tasksToExecute = foreach ($task in $Tasks) {
