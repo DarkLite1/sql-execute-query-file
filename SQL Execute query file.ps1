@@ -58,7 +58,7 @@ Begin {
         }
 
         #region Get job results
-        $M = "'{0}' get job results" -f $ComputerName
+        $M = "'{0}' job '{1}'" -f $ComputerName, $job.State
         Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
               
         $jobErrors = @()
