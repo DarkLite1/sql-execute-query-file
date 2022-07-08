@@ -135,12 +135,12 @@ Begin {
                     $result.Output += Invoke-Sqlcmd @params
                     $result.Executed = $true
 
-                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{1:fff}' -f 
+                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f 
                     (New-TimeSpan -Start $startDate -End (Get-Date))
                 }
             }
             catch {
-                $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{1:fff}' -f 
+                $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f 
                 (New-TimeSpan -Start $startDate -End (Get-Date))
                     
                 $result.Error = $_
