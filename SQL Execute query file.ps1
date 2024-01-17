@@ -24,8 +24,8 @@
     Computer name where the SQL database is hosted.
 
 .PARAMETER Tasks.DatabaseName
-    Name of the database located on the server instance. In case multiple 
-    databases need to be addressed use 'MASTER' and the 'USE database x' 
+    Name of the database located on the server instance. In case multiple
+    databases need to be addressed use 'MASTER' and the 'USE database x'
     statement within the .SQL file(s).
 
 .PARAMETER Tasks.QueryFile
@@ -60,7 +60,7 @@ Begin {
         #region Get job results
         $M = "'{0}' job '{1}'" -f $ComputerName, $job.State
         Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-              
+
         $jobErrors = @()
         $receiveParams = @{
             ErrorVariable = 'jobErrors'
@@ -68,7 +68,7 @@ Begin {
         }
         $result.Result = $Job | Receive-Job @receiveParams
         #endregion
-   
+
         #region Get job errors
         $jobErrorsFound = $false
 
@@ -77,7 +77,7 @@ Begin {
 
             $M = "'{0}' job error '{1}'" -f $ComputerName, $e.ToString()
             Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
-                  
+
             $result.Errors += $M
             $error.Remove($e)
         }
@@ -125,24 +125,25 @@ Begin {
                     $startDate = Get-Date
 
                     $params = @{
-                        ServerInstance    = $ServerInstance
-                        Database          = $database
-                        Query             = $query
-                        QueryTimeout      = '1000'
-                        ConnectionTimeout = '20'
-                        ErrorAction       = 'Stop'
+                        ServerInstance         = $ServerInstance
+                        Database               = $database
+                        Query                  = $query
+                        TrustServerCertificate = $true
+                        QueryTimeout           = '1000'
+                        ConnectionTimeout      = '20'
+                        ErrorAction            = 'Stop'
                     }
                     $result.Output += Invoke-Sqlcmd @params
                     $result.Executed = $true
 
-                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f 
+                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
                     (New-TimeSpan -Start $startDate -End (Get-Date))
                 }
             }
             catch {
-                $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f 
+                $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
                 (New-TimeSpan -Start $startDate -End (Get-Date))
-                    
+
                 $result.Error = $_
                 $error.RemoveAt(0)
             }
@@ -156,7 +157,7 @@ Begin {
         #region Get job results
         $params = @{
             Job          = $completedTask.Job
-            ComputerName = '{0}\{1}' -f $completedTask.ServerInstance, 
+            ComputerName = '{0}\{1}' -f $completedTask.ServerInstance,
             $completedTask.Database
         }
         $jobOutput = Get-JobResultsAndErrorsHC @params
@@ -165,11 +166,11 @@ Begin {
         #region Add job results
         $completedTask.JobResults += $jobOutput.Result
 
-        $jobOutput.Errors | ForEach-Object { 
-            $completedTask.JobErrors += $_ 
+        $jobOutput.Errors | ForEach-Object {
+            $completedTask.JobErrors += $_
         }
         #endregion
-            
+
         $completedTask.Job = $null
     }
 
@@ -196,37 +197,35 @@ Begin {
             throw "Failed creating the log folder '$LogFolder': $_"
         }
         #endregion
-        
+
         #region Import .json file
         $M = "Import .json file '$ImportFile'"
         Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-        
+
         $file = Get-Content $ImportFile -Raw -EA Stop | ConvertFrom-Json
         #endregion
-        
+
         #region Test .json file properties
-        #region MailTo
         if (-not ($MailTo = $file.MailTo)) {
             throw "Input file '$ImportFile': Property 'MailTo' is missing"
         }
-        #endregion
 
-        #region MaxConcurrentTasks
-        if ($file.PSObject.Properties.Name -notContains 'MaxConcurrentTasks') {
+        if (-not ($MaxConcurrentJobs = $file.MaxConcurrentTasks)) {
             throw "Input file '$ImportFile': Property 'MaxConcurrentTasks' not found."
         }
-        if (-not ($file.MaxConcurrentTasks -is [int])) {
+
+        try {
+            $null = [int]$file.MaxConcurrentTasks
+        }
+        catch {
             throw "Input file '$ImportFile': Property 'MaxConcurrentTasks' needs to be a number, the value '$($file.MaxConcurrentTasks)' is not supported."
         }
-
-        $MaxConcurrentJobs = [int]$file.MaxConcurrentTasks
-        #endregion
 
         #region Tasks
         if (-not ($Tasks = $file.Tasks)) {
             throw "Input file '$ImportFile': No 'Tasks' found."
         }
-        
+
         foreach ($task in $Tasks) {
             if (-not $task.ComputerName) {
                 throw "Input file '$ImportFile': No 'ComputerName' found in one of the 'Tasks'."
@@ -300,13 +299,13 @@ Process {
                 $task.Queries, $task.QueryFiles
             }
 
-            $M = "'{0}\{1}' Execute '{2}' .SQL files" -f 
+            $M = "'{0}\{1}' Execute '{2}' .SQL files" -f
             $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
             ($task.Queries).Count
             Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-            
+
             $task.Job = Start-Job @invokeParams
-            
+
             #region Wait for max running jobs
             $waitParams = @{
                 Name       = $tasksToExecute.Job | Where-Object { $_ }
@@ -317,7 +316,7 @@ Process {
 
             #region Get job results
             foreach (
-                $completedTask in 
+                $completedTask in
                 $tasksToExecute | Where-Object {
                     ($_.Job) -and
                     ($_.Job.State -match 'Completed|Failed')
@@ -345,11 +344,11 @@ Process {
             #endregion
 
             $finishedJob = $runningTasks.Job | Wait-Job -Any
-        
+
             $completedTask = $runningTasks | Where-Object {
                 $_.Job.Id -eq $finishedJob.Id
             }
-        
+
             & $getJobResult
         }
         #endregion
@@ -368,9 +367,9 @@ Process {
             $M = "Export $($jobResults.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
             Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
 
-            $jobResults | 
+            $jobResults |
             Select-Object -Property * -ExcludeProperty 'PSComputerName',
-            'RunSpaceId', 'PSShowComputerName', 'Output' | 
+            'RunSpaceId', 'PSShowComputerName', 'Output' |
             Export-Excel @excelParams
 
             $mailParams.Attachments = $excelParams.Path
@@ -391,7 +390,7 @@ Process {
             $M = "Export $($jobErrors.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
             Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
 
-            $jobErrors | 
+            $jobErrors |
             Select-Object -Property @{
                 Name       = 'ComputerName';
                 Expression = {
@@ -415,7 +414,7 @@ Process {
                 Expression = {
                     $_.JobErrors -join ', '
                 }
-            } | 
+            } |
             Export-Excel @excelParams
 
             $mailParams.Attachments = $excelParams.Path
@@ -462,7 +461,7 @@ End {
         )
 
         if (
-            $totalErrorCount = $counter.queryErrors + $counter.jobErrors + 
+            $totalErrorCount = $counter.queryErrors + $counter.jobErrors +
             $counter.systemErrors
         ) {
             $mailParams.Priority = 'High'
@@ -474,12 +473,12 @@ End {
 
         #region Create error html lists
         $systemErrorsHtmlList = if ($counter.systemErrors) {
-            "<p>Detected <b>{0} non terminating error{1}:{2}</p>" -f $counter.systemErrors, 
+            "<p>Detected <b>{0} non terminating error{1}:{2}</p>" -f $counter.systemErrors,
             $(
                 if ($counter.systemErrors -gt 1) { 's' }
             ),
             $(
-                $Error.Exception.Message | Where-Object { $_ } | 
+                $Error.Exception.Message | Where-Object { $_ } |
                 ConvertTo-HtmlListHC
             )
         }
@@ -513,7 +512,7 @@ End {
                 </tr>"
             }
         )
-        
+
         $mailParams += @{
             To        = $MailTo
             Bcc       = $ScriptAdmin
@@ -527,7 +526,7 @@ End {
         }
 
         if ($mailParams.Attachments) {
-            $mailParams.Message += 
+            $mailParams.Message +=
             "<p><i>* Check the attachment for details</i></p>"
         }
 

@@ -11,12 +11,12 @@ BeforeAll {
 
     $testQueryPaths = @(
         (New-Item 'TestDrive:/query1.sql' -ItemType File).FullName,
-        (New-Item 'TestDrive:/query2.sql' -ItemType File).FullName 
+        (New-Item 'TestDrive:/query2.sql' -ItemType File).FullName
     )
     $testQueryPaths | ForEach-Object {
         "SELECT * `r`nFROM MyTable`r`nWHERE X = 1" | Out-File -FilePath $_
     }
-    
+
     $testScript = $PSCommandPath.Replace('.Tests.ps1', '.ps1')
     $testParams = @{
         ScriptName = 'Test (Brecht)'
@@ -31,16 +31,16 @@ BeforeAll {
 }
 Describe 'the mandatory parameters are' {
     It '<_>' -ForEach @('ImportFile', 'ScriptName') {
-        (Get-Command $testScript).Parameters[$_].Attributes.Mandatory | 
+        (Get-Command $testScript).Parameters[$_].Attributes.Mandatory |
         Should -BeTrue
     }
 }
 Describe 'send an e-mail to the admin when' {
     BeforeAll {
         $MailAdminParams = {
-            ($To -eq $ScriptAdmin) -and ($Priority -eq 'High') -and 
+            ($To -eq $ScriptAdmin) -and ($Priority -eq 'High') -and
             ($Subject -eq 'FAILURE')
-        }    
+        }
     }
     It 'the log folder cannot be created' {
         $testNewParams = $testParams.clone()
@@ -49,7 +49,7 @@ Describe 'send an e-mail to the admin when' {
         .$testScript @testNewParams
 
         Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-            (&$MailAdminParams) -and 
+            (&$MailAdminParams) -and
             ($Message -like '*Failed creating the log folder*')
         }
     }
@@ -57,9 +57,9 @@ Describe 'send an e-mail to the admin when' {
         It 'is not found' {
             $testNewParams = $testParams.clone()
             $testNewParams.ImportFile = 'nonExisting.json'
-    
+
             .$testScript @testNewParams
-    
+
             Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "Cannot find path*nonExisting.json*")
             }
@@ -79,9 +79,9 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*Property 'MailTo' is missing*")
                 }
@@ -94,9 +94,9 @@ Describe 'send an e-mail to the admin when' {
                     MaxConcurrentTasks = 1
                     MailTo             = 'bob@contoso.com'
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'Tasks' found*")
                 }
@@ -116,9 +116,9 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'ComputerName' found*")
                 }
@@ -138,16 +138,16 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'DatabaseName' found*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'
                 }
-            } 
+            }
             It 'QueryFile is missing' {
                 @{
                     MailTo             = 'bob@contoso.com'
@@ -160,16 +160,16 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'QueryFile' found*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'
                 }
-            } 
+            }
             It 'QueryFile path not found' {
                 @{
                     MailTo             = 'bob@contoso.com'
@@ -182,9 +182,9 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file 'xx/xx' not found for the task on 'PC1 PC2'*")
                 }
@@ -205,9 +205,9 @@ Describe 'send an e-mail to the admin when' {
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-                
+
                 .$testScript @testParams
-                
+
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                     (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file '$testFileInvalid' is not supported, only the extension '.sql' is supported*")
                 }
@@ -221,11 +221,11 @@ Describe 'send an e-mail to the admin when' {
                         MailTo = @('bob@contoso.com')
                         # MaxConcurrentTasks = 1
                     } | ConvertTo-Json | Out-File @testOutParams
-            
+
                     .$testScript @testParams
-                            
+
                     Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                        (&$MailAdminParams) -and 
+                        (&$MailAdminParams) -and
                         ($Message -like "*$ImportFile*Property 'MaxConcurrentTasks' not found*")
                     }
                     Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
@@ -239,7 +239,7 @@ Describe 'send an e-mail to the admin when' {
                     } | ConvertTo-Json | Out-File @testOutParams
 
                     .$testScript @testParams
-            
+
                     Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
                         (&$MailAdminParams) -and
                         ($Message -like "*$ImportFile*Property 'MaxConcurrentTasks' needs to be a number, the value 'a' is not supported*")
@@ -263,11 +263,11 @@ Describe 'send an e-mail to the admin when' {
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-        
+
         .$testScript @testParams
 
         Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-            (&$MailAdminParams) -and 
+            (&$MailAdminParams) -and
             ($Message -like "*No file content in query file '*\file.sql'*")
         }
     }
@@ -285,7 +285,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-        
+
         $testExportedExcelRows = @(
             [PSCustomObject]@{
                 ComputerName = 'PC1'
@@ -353,8 +353,8 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             }
         )
 
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 Start-Sleep -Seconds 2
                 @(
                     [PSCustomObject]@{
@@ -379,8 +379,8 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             ($ArgumentList[0] -eq 'PC1') -and
             ($ArgumentList[1] -eq 'a')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
@@ -404,8 +404,8 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             ($ArgumentList[0] -eq 'PC2') -and
             ($ArgumentList[1] -eq 'a')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
@@ -429,8 +429,8 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             ($ArgumentList[0] -eq 'PC1') -and
             ($ArgumentList[1] -eq 'b')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
@@ -482,7 +482,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             ($ArgumentList[1] -eq 'b') -and
             ($ArgumentList[2].Count -eq 2)
         }
-    } 
+    }
     Context 'export an Excel file' {
         BeforeAll {
             $testExcelLogFile = Get-ChildItem $testParams.LogFolder -File -Recurse -Filter '*.xlsx'
@@ -533,7 +533,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-        
+
         $testExportedExcelRows = @(
             [PSCustomObject]@{
                 ComputerName = 'PC1'
@@ -601,8 +601,8 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             }
         )
 
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
@@ -626,8 +626,8 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             ($ArgumentList[0] -eq 'PC1') -and
             ($ArgumentList[1] -eq 'a')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
@@ -651,8 +651,8 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             ($ArgumentList[0] -eq 'PC2') -and
             ($ArgumentList[1] -eq 'a')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
@@ -676,8 +676,8 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             ($ArgumentList[0] -eq 'PC1') -and
             ($ArgumentList[1] -eq 'b')
         }
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 @(
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
@@ -729,7 +729,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             ($ArgumentList[1] -eq 'b') -and
             ($ArgumentList[2].Count -eq 2)
         }
-    } 
+    }
     Context 'export an Excel file' {
         BeforeAll {
             $testExcelLogFile = Get-ChildItem $testParams.LogFolder -File -Recurse -Filter '*.xlsx'
@@ -766,7 +766,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             ($Message -like "*<th>Total queries</th>*<td>8</td>*<th>Executed queries</th>*<td>7</td>*<th>Not executed queries</th>*<td>1</td>*<th>Failed queries</th>*<td>1</td>*<p><i>* Check the attachment for details</i></p>*")
         }
     }
-} 
+}
 Describe 'when a job fails' {
     BeforeAll {
         @{
@@ -780,7 +780,7 @@ Describe 'when a job fails' {
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-        
+
         $testExportedExcelRows = @(
             [PSCustomObject]@{
                 ComputerName = 'PC1'
@@ -790,8 +790,8 @@ Describe 'when a job fails' {
             }
         )
 
-        Mock Start-Job -MockWith { 
-            & $realStartJobCommand -Scriptblock { 
+        Mock Start-Job -MockWith {
+            & $realStartJobCommand -Scriptblock {
                 throw 'oops'
             }
         }
@@ -806,12 +806,12 @@ Describe 'when a job fails' {
             ($ArgumentList[2].Count -eq 2)
         }
         Should -Invoke Start-Job -Times 1 -Exactly -Scope Describe
-    } 
+    }
     Context 'export errors to an Excel file' {
         BeforeAll {
             $testExcelLogFile = Get-ChildItem $testParams.LogFolder -File -Recurse -Filter '*.xlsx'
 
-            { 
+            {
                 Import-Excel -Path $testExcelLogFile.FullName -WorksheetName 'Overview'
             } | Should -Throw
 
@@ -846,5 +846,5 @@ Describe 'when a job fails' {
             ($Attachments -like '* - Log.xlsx') -and
             ($Message -like "*<th>Total queries</th>*<td>2</td>*<th>Executed queries</th>*<td>0</td>*<th>Not executed queries</th>*<td>2</td>*<th>Failed queries</th>*<td>0</td>*<th>Job errors</th>*<td>1</td>*<p><i>* Check the attachment for details</i></p>*")
         }
-    } -tag test
+    }
 }
