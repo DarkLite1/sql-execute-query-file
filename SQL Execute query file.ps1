@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 #Requires -Modules SqlServer, ImportExcel
-#Requires -Modules Toolbox.HTML, Toolbox.Remoting, Toolbox.EventLog
+#Requires -Modules Toolbox.HTML, Toolbox.EventLog
 
 <#
 .SYNOPSIS
@@ -28,7 +28,7 @@
     databases need to be addressed use 'MASTER' and the 'USE database x'
     statement within the .SQL file(s).
 
-.PARAMETER Tasks.QueryFile
+.PARAMETER Tasks.SqlFiles
     The .SQL file containing the SQL statements to execute.
 #>
 
@@ -43,137 +43,6 @@ Param (
 )
 
 Begin {
-    Function Get-JobResultsAndErrorsHC {
-        [OutputType([PSCustomObject])]
-        Param (
-            [Parameter(Mandatory)]
-            [System.Management.Automation.Job]$Job,
-            [Parameter(Mandatory)]
-            [String]$ComputerName
-        )
-
-        $result = [PSCustomObject]@{
-            Result = $null
-            Errors = @()
-        }
-
-        #region Get job results
-        $M = "'{0}' job '{1}'" -f $ComputerName, $job.State
-        Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-
-        $jobErrors = @()
-        $receiveParams = @{
-            ErrorVariable = 'jobErrors'
-            ErrorAction   = 'SilentlyContinue'
-        }
-        $result.Result = $Job | Receive-Job @receiveParams
-        #endregion
-
-        #region Get job errors
-        $jobErrorsFound = $false
-
-        foreach ($e in $jobErrors) {
-            $jobErrorsFound = $true
-
-            $M = "'{0}' job error '{1}'" -f $ComputerName, $e.ToString()
-            Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
-
-            $result.Errors += $M
-            $error.Remove($e)
-        }
-        foreach ($e in $result.Result.Error | Where-Object { $_ }) {
-            $jobErrorsFound = $true
-
-            $M = "'{0}' error '{1}'" -f $ComputerName, $e
-            Write-Warning $M; Write-EventLog @EventWarnParams -Message $M
-        }
-        #endregion
-
-        if (-not $jobErrorsFound) {
-            $M = "'{0}' job successful" -f $ComputerName
-            Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-        }
-
-        $result
-    }
-    $executeQueryFiles = {
-        Param (
-            [Parameter(Mandatory)]
-            [String]$ServerInstance,
-            [Parameter(Mandatory)]
-            [String]$Database,
-            [Parameter(Mandatory)]
-            [String[]]$Queries,
-            [Parameter(Mandatory)]
-            [String[]]$QueryFiles
-        )
-
-        $i = 0
-        foreach ($query in $Queries) {
-            try {
-                $result = [PSCustomObject]@{
-                    ComputerName = $ServerInstance
-                    DatabaseName = $database
-                    QueryFile    = $QueryFiles[$i]
-                    Executed     = $false
-                    Duration     = $null
-                    Error        = $null
-                    Output       = @()
-                }
-
-                if (-not $result.Error) {
-                    $startDate = Get-Date
-
-                    $params = @{
-                        ServerInstance         = $ServerInstance
-                        Database               = $database
-                        Query                  = $query
-                        TrustServerCertificate = $true
-                        QueryTimeout           = '1000'
-                        ConnectionTimeout      = '20'
-                        ErrorAction            = 'Stop'
-                    }
-                    $result.Output += Invoke-Sqlcmd @params
-                    $result.Executed = $true
-
-                    $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
-                    (New-TimeSpan -Start $startDate -End (Get-Date))
-                }
-            }
-            catch {
-                $result.Duration = '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
-                (New-TimeSpan -Start $startDate -End (Get-Date))
-
-                $result.Error = $_
-                $error.RemoveAt(0)
-            }
-            finally {
-                $i++
-                $result
-            }
-        }
-    }
-    $getJobResult = {
-        #region Get job results
-        $params = @{
-            Job          = $completedTask.Job
-            ComputerName = '{0}\{1}' -f $completedTask.ServerInstance,
-            $completedTask.Database
-        }
-        $jobOutput = Get-JobResultsAndErrorsHC @params
-        #endregion
-
-        #region Add job results
-        $completedTask.JobResults += $jobOutput.Result
-
-        $jobOutput.Errors | ForEach-Object {
-            $completedTask.JobErrors += $_
-        }
-        #endregion
-
-        $completedTask.Job = $null
-    }
-
     try {
         Import-EventLogParamsHC -Source $ScriptName
         Write-EventLog @EventStartParams
@@ -235,11 +104,11 @@ Begin {
                 throw "Input file '$ImportFile': No 'DatabaseName' found for the task on '$($task.ComputerName)'."
             }
 
-            if (-not $task.QueryFile) {
-                throw "Input file '$ImportFile': No 'QueryFile' found for the task on '$($task.ComputerName)'."
+            if (-not $task.SqlFiles) {
+                throw "Input file '$ImportFile': No 'SqlFiles' found for the task on '$($task.ComputerName)'."
             }
 
-            foreach ($q in $task.QueryFile) {
+            foreach ($q in $task.SqlFiles) {
                 if (-not (Test-Path -LiteralPath $q -PathType Leaf)) {
                     throw "Input file '$ImportFile': Query file '$q' not found for the task on '$($task.ComputerName)'."
                 }
@@ -267,11 +136,11 @@ Begin {
 
         #region Create a list of tasks to execute
         $tasksToExecute = foreach ($task in $Tasks) {
-            $queries = foreach ($queryFile in $task.QueryFile) {
-                $fileContent = Get-Content -LiteralPath $queryFile -Raw -EA Stop
+            $filesContent = foreach ($file in $task.SqlFiles) {
+                $fileContent = Get-Content -LiteralPath $file -Raw -EA Stop
 
                 if (-not $fileContent) {
-                    throw "No file content in query file '$queryFile'"
+                    throw "No file content in query file '$file'"
                 }
 
                 $fileContent
@@ -280,20 +149,22 @@ Begin {
             foreach ($computerName in $task.ComputerName) {
                 foreach ($databaseName in $task.DatabaseName) {
                     [PSCustomObject]@{
-                        ServerInstance = $computerName
-                        Database       = $databaseName
-                        QueryFiles     = @($task.QueryFile)
-                        Queries        = @($queries)
-                        Job            = $null
-                        JobResults     = @()
-                        JobErrors      = @()
+                        ComputerName = $computerName
+                        Database     = $databaseName
+                        SqlFile      = @{
+                            Paths    = @($task.SqlFiles)
+                            Contents = @($filesContent)
+                        }
+                        Job          = @{
+                            Results = @()
+                            Errors  = @()
+                        }
+
                     }
                 }
             }
         }
         #endregion
-
-        $mailParams = @{}
     }
     catch {
         Write-Warning $_
@@ -305,12 +176,66 @@ Begin {
 
 Process {
     Try {
+        $sqlScriptBlock = {
+            Param (
+                [Parameter(Mandatory)]
+                [String]$ComputerName,
+                [Parameter(Mandatory)]
+                [String]$DatabaseName,
+                [Parameter(Mandatory)]
+                [String[]]$SqlFileContents,
+                [Parameter(Mandatory)]
+                [String[]]$SqlFilePaths
+            )
+
+            $i = 0
+            foreach ($fileContent in $SqlFileContents) {
+                try {
+                    $result = [PSCustomObject]@{
+                        ComputerName = $ComputerName
+                        DatabaseName = $DatabaseName
+                        SqlFile      = $SqlFilePaths[$i]
+                        StartTime    = Get-Date
+                        EndTime      = $null
+                        Executed     = $false
+                        Error        = $null
+                        Output       = @()
+                    }
+
+                    $result.StartTime = Get-Date
+
+                    $params = @{
+                        ServerInstance         = $ComputerName
+                        Database               = $DatabaseName
+                        Query                  = $fileContent
+                        TrustServerCertificate = $true
+                        QueryTimeout           = '1000'
+                        ConnectionTimeout      = '20'
+                        ErrorAction            = 'Stop'
+                    }
+                    $result.Output += Invoke-Sqlcmd @params
+                    $result.Executed = $true
+                }
+                catch {
+                    $result.Error = $_
+                    $error.RemoveAt(0)
+                }
+                finally {
+                    $result.EndTime = Get-Date
+
+                    $i++
+                    $result
+                }
+            }
+        }
+
         $scriptBlock = {
             try {
                 $task = $_
 
                 #region Declare variables for code running in parallel
                 if (-not $MaxConcurrentJobs) {
+                    $sqlScriptBlock = $using:sqlScriptBlock
                     $PSSessionConfiguration = $using:PSSessionConfiguration
                     $EventVerboseParams = $using:EventVerboseParams
                 }
@@ -318,46 +243,28 @@ Process {
 
                 #region Create job parameters
                 $invokeParams = @{
-                    FilePath     = $moveScriptPath
-                    ArgumentList = $task.SourceFolder,
-                    $task.Destination.Folder,
-                    $task.Destination.ChildFolder,
-                    $task.OlderThan.Unit,
-                    $task.OlderThan.Quantity,
-                    $task.Option.DuplicateFile
+                    ScriptBlock  = $sqlScriptBlock
+                    ArgumentList = $task.ComputerName, $task.Database,
+                    $task.SqlFile.Contents, $task.SqlFile.Paths
+                    ErrorAction  = 'Stop'
                 }
 
-                $M = "Start job on '{0}' with SourceFolder '{1}' Destination.Folder '{2}' Destination.ChildFolder '{3}' OlderThan.Unit '{4}' OlderThan.Quantity '{5}' Option.DuplicateFile '{6}'" -f $env:COMPUTERNAME,
-                $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
-                $invokeParams.ArgumentList[2], $invokeParams.ArgumentList[3],
-                $invokeParams.ArgumentList[4], $invokeParams.ArgumentList[5]
+                $M = "Execute on '{0}\{1}' {2} .SQL files" -f
+                $invokeParams.ArgumentList[0],
+                $invokeParams.ArgumentList[1],
+                $invokeParams.ArgumentList[3].Count
                 Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
                 #endregion
 
                 #region Start job
-                $computerName = $task.ComputerName
-
-                $task.Job.Results += if (
-                    $computerName -eq $ENV:COMPUTERNAME
-                ) {
-                    $params = $invokeParams.ArgumentList
-                    & $invokeParams.FilePath @params
-                }
-                else {
-                    $invokeParams += @{
-                        ConfigurationName = $PSSessionConfiguration
-                        ComputerName      = $computerName
-                        ErrorAction       = 'Stop'
-                    }
-                    Invoke-Command @invokeParams
-                }
+                $task.Job.Results += Invoke-Command @invokeParams
                 #endregion
 
                 #region Verbose
-                $M = "Task on '{0}' with SourceFolder '{1}' Destination.Folder '{2}' Destination.ChildFolder '{3}' OlderThan.Unit '{4}' OlderThan.Quantity '{5}' Option.DuplicateFile '{6}'. Results: {7}" -f $env:COMPUTERNAME,
-                $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
-                $invokeParams.ArgumentList[2], $invokeParams.ArgumentList[3],
-                $invokeParams.ArgumentList[4], $invokeParams.ArgumentList[5],
+                $M = "Results on '{0}\{1}' for {2} .SQL files. Results: {3}" -f
+                $invokeParams.ArgumentList[0],
+                $invokeParams.ArgumentList[1],
+                $invokeParams.ArgumentList[3].Count,
                 $task.Job.Results.Count
 
                 if ($errorCount = $task.Job.Results.Where({ $_.Error }).Count) {
@@ -396,136 +303,6 @@ Process {
 
         $tasksToExecute | ForEach-Object @foreachParams
         #endregion
-
-        #region Start jobs to execute queries
-        foreach ($task in $tasksToExecute) {
-            $invokeParams = @{
-                ScriptBlock  = $executeQueryFiles
-                ArgumentList = $task.ServerInstance, $task.Database,
-                $task.Queries, $task.QueryFiles
-            }
-
-            $M = "'{0}\{1}' Execute '{2}' .SQL files" -f
-            $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
-            ($task.Queries).Count
-            Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-
-            $task.Job = Start-Job @invokeParams
-
-            #region Wait for max running jobs
-            $waitParams = @{
-                Name       = $tasksToExecute.Job | Where-Object { $_ }
-                MaxThreads = $MaxConcurrentJobs
-            }
-            Wait-MaxRunningJobsHC @waitParams
-            #endregion
-
-            #region Get job results
-            foreach (
-                $completedTask in
-                $tasksToExecute | Where-Object {
-                    ($_.Job) -and
-                    ($_.Job.State -match 'Completed|Failed')
-                }
-            ) {
-                & $getJobResult
-            }
-            #endregion
-        }
-        #endregion
-
-        #region Wait for jobs to finish and get results
-        while (
-            $runningTasks = $tasksToExecute | Where-Object { $_.Job }
-        ) {
-            #region Verbose progress
-            $runningJobCounter = ($runningTasks | Measure-Object).Count
-            if ($runningJobCounter -eq 1) {
-                $M = 'Wait for the last running job to finish'
-            }
-            else {
-                $M = "Wait for one of '{0}' running jobs to finish" -f $runningJobCounter
-            }
-            Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
-            #endregion
-
-            $finishedJob = $runningTasks.Job | Wait-Job -Any
-
-            $completedTask = $runningTasks | Where-Object {
-                $_.Job.Id -eq $finishedJob.Id
-            }
-
-            & $getJobResult
-        }
-        #endregion
-
-        #region Export job results to Excel file
-        if ($jobResults = $tasksToExecute.JobResults | Where-Object { $_ }) {
-            $excelParams = @{
-                Path               = $logFile + ' - Log.xlsx'
-                WorksheetName      = 'Overview'
-                TableName          = 'Overview'
-                NoNumberConversion = '*'
-                AutoSize           = $true
-                FreezeTopRow       = $true
-            }
-
-            $M = "Export $($jobResults.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
-            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-
-            $jobResults |
-            Select-Object -Property * -ExcludeProperty 'PSComputerName',
-            'RunSpaceId', 'PSShowComputerName', 'Output' |
-            Export-Excel @excelParams
-
-            $mailParams.Attachments = $excelParams.Path
-        }
-        #endregion
-
-        #region Export job errors to Excel file
-        if ($jobErrors = $tasksToExecute | Where-Object { $_.JobErrors }) {
-            $excelParams = @{
-                Path               = $logFile + ' - Log.xlsx'
-                WorksheetName      = 'JobErrors'
-                TableName          = 'JobErrors'
-                NoNumberConversion = '*'
-                AutoSize           = $true
-                FreezeTopRow       = $true
-            }
-
-            $M = "Export $($jobErrors.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
-            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
-
-            $jobErrors |
-            Select-Object -Property @{
-                Name       = 'ComputerName';
-                Expression = {
-                    $_.ServerInstance
-                }
-            },
-            @{
-                Name       = 'DatabaseName';
-                Expression = {
-                    $_.Database
-                }
-            },
-            @{
-                Name       = 'QueryFiles';
-                Expression = {
-                    ($_.QueryFiles | Measure-Object).Count
-                }
-            },
-            @{
-                Name       = 'Error';
-                Expression = {
-                    $_.JobErrors -join ', '
-                }
-            } |
-            Export-Excel @excelParams
-
-            $mailParams.Attachments = $excelParams.Path
-        }
-        #endregion
     }
     Catch {
         Write-Warning $_
@@ -537,23 +314,75 @@ Process {
 
 End {
     try {
-        #region Send mail to user
+        $mailParams = @{}
+
+        $excelParams = @{
+            Path               = $logFile + ' - Log.xlsx'
+            NoNumberConversion = '*'
+            AutoSize           = $true
+            FreezeTopRow       = $true
+        }
+
+        #region Export job results to Excel file
+        if ($jobResults = $tasksToExecute.Job.Results | Where-Object { $_ }) {
+            $excelParams.WorksheetName = $excelParams.TableName = 'Overview'
+
+            $M = "Export $($jobResults.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
+            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
+
+            $jobResults |
+            Select-Object -Property 'ComputerName',
+            'DatabaseName', 'StartTime', 'EndTime',
+            @{
+                Name       = 'Duration'
+                Expression = {
+                    '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
+                    (New-TimeSpan -Start $_.StartTime -End $_.EndTime)
+                }
+            },
+            'SqlFile', 'Output', 'Error' |
+            Export-Excel @excelParams
+
+            $mailParams.Attachments = $excelParams.Path
+        }
+        #endregion
+
+        #region Export job errors to Excel file
+        if ($jobErrors = $tasksToExecute | Where-Object { $_.Job.Errors }) {
+            $excelParams.WorksheetName = $excelParams.TableName = 'Errors'
+
+            $M = "Export $($jobErrors.Count) rows to Excel sheet '$($excelParams.WorksheetName)'"
+            Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
+
+            $jobErrors |
+            Select-Object -Property 'ComputerName', 'DatabaseName',
+            @{
+                Name       = 'SqlFiles';
+                Expression = { $_.SqlFile.Paths.Count }
+            },
+            @{
+                Name       = 'Error';
+                Expression = { $_.Job.Errors -join ', ' }
+            } |
+            Export-Excel @excelParams
+
+            $mailParams.Attachments = $excelParams.Path
+        }
+        #endregion
 
         #region Count results, errors, ...
         $counter = @{
-            queriesTotal    = (
-                $tasksToExecute.QueryFiles | Measure-Object
-            ).Count
-            queriesExecuted = (
+            sqlFiles         = $tasksToExecute.SqlFile.Paths.Count
+            sqlFilesExecuted = (
                 $jobResults | Where-Object { $_.Executed } | Measure-Object
             ).Count
-            queryErrors     = (
+            executionErrors  = (
                 $jobResults | Where-Object { $_.Error } | Measure-Object
             ).Count
-            jobErrors       = (
+            jobErrors        = (
                 $jobErrors | Measure-Object
             ).Count
-            systemErrors    = (
+            systemErrors     = (
                 $Error.Exception.Message | Measure-Object
             ).Count
         }
@@ -562,12 +391,12 @@ End {
         #region Mail subject and priority
         $mailParams.Priority = 'Normal'
 
-        $mailParams.Subject = '{0} {1}' -f $counter.queriesTotal, $(
-            if ($counter.queriesTotal -eq 1) { 'query' } else { 'queries' }
+        $mailParams.Subject = '{0} job{1}' -f $counter.sqlFiles, $(
+            if ($counter.sqlFiles -ne 1) { 's' }
         )
 
         if (
-            $totalErrorCount = $counter.queryErrors + $counter.jobErrors +
+            $totalErrorCount = $counter.executionErrors + $counter.jobErrors +
             $counter.systemErrors
         ) {
             $mailParams.Priority = 'High'
@@ -590,23 +419,24 @@ End {
         }
         #endregion
 
+        #region Send mail to user
         $summaryTable = "
         <table>
             <tr>
                 <th>Total queries</th>
-                <td>$($counter.queriesTotal)</td>
+                <td>$($counter.sqlFiles)</td>
             </tr>
             <tr>
                 <th>Executed queries</th>
-                <td>$($counter.queriesExecuted)</td>
+                <td>$($counter.sqlFilesExecuted)</td>
             </tr>
             <tr>
                 <th>Not executed queries</th>
-                <td>$($counter.queriesTotal - $counter.queriesExecuted)</td>
+                <td>$($counter.sqlFiles - $counter.sqlFilesExecuted)</td>
             </tr>
             <tr>
                 <th>Failed queries</th>
-                <td>$($counter.queryErrors)</td>
+                <td>$($counter.executionErrors)</td>
             </tr>
             {0}
         </table>

@@ -75,7 +75,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = @('PC1')
                             DatabaseName = @('TicketSystem', 'TicketSystemBackup')
-                            QueryFile    = $testQueryPaths
+                            SqlFiles     = $testQueryPaths
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -112,7 +112,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = $null
                             DatabaseName = @('TicketSystem', 'TicketSystemBackup')
-                            QueryFile    = $testQueryPaths
+                            SqlFiles     = $testQueryPaths
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -134,7 +134,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = @('PC1', 'PC2')
                             DatabaseName = @()
-                            QueryFile    = $testQueryPaths
+                            SqlFiles     = $testQueryPaths
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -148,7 +148,7 @@ Describe 'send an e-mail to the admin when' {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'QueryFile is missing' {
+            It 'SqlFiles is missing' {
                 @{
                     MailTo             = 'bob@contoso.com'
                     MaxConcurrentTasks = 1
@@ -156,7 +156,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = @('PC1', 'PC2')
                             DatabaseName = @('a')
-                            QueryFile    = @($null)
+                            SqlFiles     = @($null)
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -164,13 +164,13 @@ Describe 'send an e-mail to the admin when' {
                 .$testScript @testParams
 
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'QueryFile' found*")
+                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'SqlFiles' found*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'QueryFile path not found' {
+            It 'SqlFiles path not found' {
                 @{
                     MailTo             = 'bob@contoso.com'
                     MaxConcurrentTasks = 1
@@ -178,7 +178,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = @('PC1', 'PC2')
                             DatabaseName = @('a')
-                            QueryFile    = @('xx/xx')
+                            SqlFiles     = @('xx/xx')
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -192,7 +192,7 @@ Describe 'send an e-mail to the admin when' {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'QueryFile path not of extension .sql' {
+            It 'SqlFiles path not of extension .sql' {
                 $testFileInvalid = (New-Item 'TestDrive:/query.xxx' -ItemType File).FullName
                 @{
                     MailTo             = 'bob@contoso.com'
@@ -201,7 +201,7 @@ Describe 'send an e-mail to the admin when' {
                         @{
                             ComputerName = @('PC1', 'PC2')
                             DatabaseName = @('a')
-                            QueryFile    = @($testFileInvalid)
+                            SqlFiles     = @($testFileInvalid)
                         }
                     )
                 } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -259,7 +259,7 @@ Describe 'send an e-mail to the admin when' {
                 @{
                     ComputerName = @('PC1')
                     DatabaseName = @('a')
-                    QueryFile    = (New-Item -Path 'TestDrive:\file.sql' -ItemType File).FullName
+                    SqlFiles     = (New-Item -Path 'TestDrive:\file.sql' -ItemType File).FullName
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -281,7 +281,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    QueryFile    = $testQueryPaths
+                    SqlFiles     = $testQueryPaths
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -290,7 +290,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1a1'
                 Error        = 'problem'
@@ -298,7 +298,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $false
                 Duration     = $null
                 Error        = $null
@@ -306,7 +306,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1b1'
                 Error        = $null
@@ -314,7 +314,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1b2'
                 Error        = $null
@@ -322,7 +322,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2a1'
                 Error        = $null
@@ -330,7 +330,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2a2'
                 Error        = $null
@@ -338,7 +338,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2b1'
                 Error        = $null
@@ -346,7 +346,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2b2'
                 Error        = $null
@@ -360,7 +360,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1a1'
                         Error        = 'problem'
@@ -368,7 +368,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $false
                         Duration     = $null
                         Error        = $null
@@ -385,7 +385,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2a1'
                         Error        = $null
@@ -393,7 +393,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2a2'
                         Error        = $null
@@ -410,7 +410,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1b1'
                         Error        = $null
@@ -418,7 +418,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1b2'
                         Error        = $null
@@ -435,7 +435,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2b1'
                         Error        = $null
@@ -443,7 +443,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2b2'
                         Error        = $null
@@ -500,7 +500,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                 $actualRow = $actual | Where-Object {
                     ($_.ComputerName -eq $testRow.ComputerName) -and
                     ($_.DatabaseName -eq $testRow.DatabaseName) -and
-                    ($_.QueryFile -eq $testRow.QueryFile)
+                    ($_.SqlFile -eq $testRow.SqlFile)
                 }
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
@@ -513,7 +513,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
             ($To -eq 'bob@contoso.com') -and
             ($Bcc -eq $ScriptAdmin) -and
             ($Priority -eq 'High') -and
-            ($Subject -eq '8 queries, 1 error') -and
+            ($Subject -eq '8 jobs, 1 error') -and
             ($Attachments.Count -eq 1) -and
             ($Attachments -like '* - Log.xlsx') -and
             ($Message -like "*<th>Total queries</th>*<td>8</td>*<th>Executed queries</th>*<td>7</td>*<th>Not executed queries</th>*<td>1</td>*<th>Failed queries</th>*<td>1</td>*<p><i>* Check the attachment for details</i></p>*")
@@ -529,7 +529,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    QueryFile    = $testQueryPaths
+                    SqlFiles     = $testQueryPaths
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -538,7 +538,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1a1'
                 Error        = 'problem'
@@ -546,7 +546,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $false
                 Duration     = $null
                 Error        = $null
@@ -554,7 +554,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1b1'
                 Error        = $null
@@ -562,7 +562,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:1b2'
                 Error        = $null
@@ -570,7 +570,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2a1'
                 Error        = $null
@@ -578,7 +578,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'a'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2a2'
                 Error        = $null
@@ -586,7 +586,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query1.sql'
+                SqlFile      = 'c:\query1.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2b1'
                 Error        = $null
@@ -594,7 +594,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
             [PSCustomObject]@{
                 ComputerName = 'PC2'
                 DatabaseName = 'b'
-                QueryFile    = 'c:\query2.sql'
+                SqlFile      = 'c:\query2.sql'
                 Executed     = $true
                 Duration     = '00:00:00:2b2'
                 Error        = $null
@@ -607,7 +607,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1a1'
                         Error        = 'problem'
@@ -615,7 +615,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $false
                         Duration     = $null
                         Error        = $null
@@ -632,7 +632,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2a1'
                         Error        = $null
@@ -640,7 +640,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'a'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2a2'
                         Error        = $null
@@ -657,7 +657,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1b1'
                         Error        = $null
@@ -665,7 +665,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC1'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:1b2'
                         Error        = $null
@@ -682,7 +682,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query1.sql'
+                        SqlFile      = 'c:\query1.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2b1'
                         Error        = $null
@@ -690,7 +690,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                     [PSCustomObject]@{
                         ComputerName = 'PC2'
                         DatabaseName = 'b'
-                        QueryFile    = 'c:\query2.sql'
+                        SqlFile      = 'c:\query2.sql'
                         Executed     = $true
                         Duration     = '00:00:00:2b2'
                         Error        = $null
@@ -747,7 +747,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                 $actualRow = $actual | Where-Object {
                     ($_.ComputerName -eq $testRow.ComputerName) -and
                     ($_.DatabaseName -eq $testRow.DatabaseName) -and
-                    ($_.QueryFile -eq $testRow.QueryFile)
+                    ($_.SqlFile -eq $testRow.SqlFile)
                 }
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
@@ -776,7 +776,7 @@ Describe 'when a job fails' {
                 @{
                     ComputerName = @('PC1')
                     DatabaseName = @('a')
-                    QueryFile    = $testQueryPaths
+                    SqlFiles     = $testQueryPaths
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -785,7 +785,7 @@ Describe 'when a job fails' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                QueryFiles   = $testQueryPaths.Count
+                SqlFiles     = $testQueryPaths.Count
                 Error        = "'PC1\a' job error 'oops'"
             }
         )
@@ -828,7 +828,7 @@ Describe 'when a job fails' {
                 $actualRow = $actual | Where-Object {
                     ($_.ComputerName -eq $testRow.ComputerName) -and
                     ($_.DatabaseName -eq $testRow.DatabaseName) -and
-                    ($_.QueryFile -eq $testRow.QueryFile)
+                    ($_.SqlFile -eq $testRow.SqlFile)
                 }
                 $actualRow.Executed | Should -Be $testRow.Executed
                 $actualRow.Error | Should -Be $testRow.Error
