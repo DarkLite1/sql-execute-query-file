@@ -251,6 +251,20 @@ Begin {
         #endregion
         #endregion
 
+        #region Convert .json file
+        foreach ($task in $Tasks) {
+            #region Set ComputerName if there is none
+            if (
+                (-not $task.ComputerName) -or
+                ($task.ComputerName -eq 'localhost') -or
+                ($task.ComputerName -eq "$ENV:COMPUTERNAME.$env:USERDNSDOMAIN")
+            ) {
+                $task.ComputerName = $env:COMPUTERNAME
+            }
+            #endregion
+        }
+        #endregion
+
         #region Create a list of tasks to execute
         $tasksToExecute = foreach ($task in $Tasks) {
             $queries = foreach ($queryFile in $task.QueryFile) {
@@ -291,6 +305,98 @@ Begin {
 
 Process {
     Try {
+        $scriptBlock = {
+            try {
+                $task = $_
+
+                #region Declare variables for code running in parallel
+                if (-not $MaxConcurrentJobs) {
+                    $PSSessionConfiguration = $using:PSSessionConfiguration
+                    $EventVerboseParams = $using:EventVerboseParams
+                }
+                #endregion
+
+                #region Create job parameters
+                $invokeParams = @{
+                    FilePath     = $moveScriptPath
+                    ArgumentList = $task.SourceFolder,
+                    $task.Destination.Folder,
+                    $task.Destination.ChildFolder,
+                    $task.OlderThan.Unit,
+                    $task.OlderThan.Quantity,
+                    $task.Option.DuplicateFile
+                }
+
+                $M = "Start job on '{0}' with SourceFolder '{1}' Destination.Folder '{2}' Destination.ChildFolder '{3}' OlderThan.Unit '{4}' OlderThan.Quantity '{5}' Option.DuplicateFile '{6}'" -f $env:COMPUTERNAME,
+                $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
+                $invokeParams.ArgumentList[2], $invokeParams.ArgumentList[3],
+                $invokeParams.ArgumentList[4], $invokeParams.ArgumentList[5]
+                Write-Verbose $M; Write-EventLog @EventVerboseParams -Message $M
+                #endregion
+
+                #region Start job
+                $computerName = $task.ComputerName
+
+                $task.Job.Results += if (
+                    $computerName -eq $ENV:COMPUTERNAME
+                ) {
+                    $params = $invokeParams.ArgumentList
+                    & $invokeParams.FilePath @params
+                }
+                else {
+                    $invokeParams += @{
+                        ConfigurationName = $PSSessionConfiguration
+                        ComputerName      = $computerName
+                        ErrorAction       = 'Stop'
+                    }
+                    Invoke-Command @invokeParams
+                }
+                #endregion
+
+                #region Verbose
+                $M = "Task on '{0}' with SourceFolder '{1}' Destination.Folder '{2}' Destination.ChildFolder '{3}' OlderThan.Unit '{4}' OlderThan.Quantity '{5}' Option.DuplicateFile '{6}'. Results: {7}" -f $env:COMPUTERNAME,
+                $invokeParams.ArgumentList[0], $invokeParams.ArgumentList[1],
+                $invokeParams.ArgumentList[2], $invokeParams.ArgumentList[3],
+                $invokeParams.ArgumentList[4], $invokeParams.ArgumentList[5],
+                $task.Job.Results.Count
+
+                if ($errorCount = $task.Job.Results.Where({ $_.Error }).Count) {
+                    $M += " , Errors: {0}" -f $errorCount
+                    Write-Warning $M
+                    Write-EventLog @EventErrorParams -Message $M
+                }
+                elseif ($task.Job.Results.Count) {
+                    Write-Verbose $M
+                    Write-EventLog @EventOutParams -Message $M
+                }
+                else {
+                    Write-Verbose $M
+                    Write-EventLog @EventVerboseParams -Message $M
+                }
+                #endregion
+            }
+            catch {
+                $task.Job.Errors += $_
+                $Error.RemoveAt(0)
+            }
+        }
+
+        #region Run code serial or parallel
+        $foreachParams = if ($MaxConcurrentJobs -eq 1) {
+            @{
+                Process = $scriptBlock
+            }
+        }
+        else {
+            @{
+                Parallel      = $scriptBlock
+                ThrottleLimit = $MaxConcurrentJobs
+            }
+        }
+
+        $tasksToExecute | ForEach-Object @foreachParams
+        #endregion
+
         #region Start jobs to execute queries
         foreach ($task in $tasksToExecute) {
             $invokeParams = @{
