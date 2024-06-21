@@ -7,22 +7,31 @@ BeforeAll {
         Encoding = 'utf8'
     }
 
-    $testSqlFiles = @(
-        (New-Item 'TestDrive:/query1.sql' -ItemType File).FullName,
-        (New-Item 'TestDrive:/query2.sql' -ItemType File).FullName
-    )
-    $testSqlFiles | ForEach-Object {
-        "-- SQL instructions" | Out-File -FilePath $_
+    $testData = @{
+        sqlFile = @(
+            @{
+                Path    = (New-Item 'TestDrive:/s1.sql' -ItemType File).FullName
+                Content = '-- SQL instructions file 1'
+            }
+            @{
+                Path    = (New-Item 'TestDrive:/s2.sql' -ItemType File).FullName
+                Content = '-- SQL instructions file 2'
+            }
+        )
     }
 
+    $testData.sqlFile.foreach(
+        { $_.Content | Out-File -FilePath $_.Path -NoNewline }
+    )
+
     $testInputFile = @{
-        MailTo            = 'bob@contoso.com'
-        MaxConcurrentJobs = 1
-        Tasks             = @(
+        MailTo             = 'bob@contoso.com'
+        MaxConcurrentTasks = 1
+        Tasks              = @(
             @{
                 ComputerNames = @('PC1')
                 DatabaseNames = @('db1')
-                SqlFiles      = $testSqlFiles
+                SqlFiles      = $testData.sqlFile.Path
             }
         )
     }
@@ -96,7 +105,7 @@ Describe 'send an e-mail to the admin when' {
         }
         Context 'property' {
             It '<_> not found' -ForEach @(
-                'MaxConcurrentJobs', 'Tasks', 'MailTo'
+                'MaxConcurrentTasks', 'Tasks', 'MailTo'
             ) {
                 $testNewInputFile = Copy-ObjectHC $testInputFile
                 $testNewInputFile.$_ = $null
@@ -134,7 +143,7 @@ Describe 'send an e-mail to the admin when' {
                 }
             }
             Context 'SqlFiles' {
-                It 'path not found' {
+                It 'file not found' {
                     $testNewInputFile = Copy-ObjectHC $testInputFile
                     $testNewInputFile.Tasks[0].SqlFiles = @('notExisting.sql')
 
@@ -151,7 +160,7 @@ Describe 'send an e-mail to the admin when' {
                         $EntryType -eq 'Error'
                     }
                 }
-                It 'SqlFiles path not of extension .sql' {
+                It 'file extension not .sql' {
                     $testNewInputFile = Copy-ObjectHC $testInputFile
                     $testNewInputFile.Tasks[0].SqlFiles = @((
                             New-Item 'TestDrive:/a.txt' -ItemType File).FullName
@@ -169,13 +178,30 @@ Describe 'send an e-mail to the admin when' {
                         $EntryType -eq 'Error'
                     }
                 }
+                It 'file empty' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Tasks[0].SqlFiles = @((
+                            New-Item 'TestDrive:/b.sql' -ItemType File).FullName
+                    )
+
+                    $testNewInputFile | ConvertTo-Json -Depth 7 |
+                    Out-File @testOutParams
+
+                    .$testScript @testParams
+
+                    Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
+                        (&$MailAdminParams) -and
+                        ($Message -like "*No file content in SQL file '$($testNewInputFile.Tasks[0].SqlFiles[0])'*")
+                    }
+                }
             }
             Context 'MaxConcurrentTasks' {
                 It 'is not a number' {
-                    @{
-                        MailTo             = @('bob@contoso.com')
-                        MaxConcurrentTasks = 'a'
-                    } | ConvertTo-Json | Out-File @testOutParams
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.MaxConcurrentTasks = 'a'
+
+                    $testNewInputFile | ConvertTo-Json -Depth 7 |
+                    Out-File @testOutParams
 
                     .$testScript @testParams
 
@@ -187,30 +213,72 @@ Describe 'send an e-mail to the admin when' {
                         $EntryType -eq 'Error'
                     }
                 }
-            } -Tag test
-        }
-    }
-    It 'a .SQL file is empty' {
-        @{
-            MailTo             = 'bob@contoso.com'
-            MaxConcurrentTasks = 1
-            Tasks              = @(
-                @{
-                    ComputerName = @('PC1')
-                    DatabaseName = @('a')
-                    SqlFiles     = (New-Item -Path 'TestDrive:\file.sql' -ItemType File).FullName
-                }
-            )
-        } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-
-        .$testScript @testParams
-
-        Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-            (&$MailAdminParams) -and
-            ($Message -like "*No file content in query file '*\file.sql'*")
+            }
         }
     }
 }
+Describe 'execute the SQL script with Invoke-Command' {
+    It 'once for 1 computer name and 1 database name' {
+        $testNewInputFile = Copy-ObjectHC $testInputFile
+        $testNewInputFile.Tasks[0].ComputerNames = 'PC1'
+        $testNewInputFile.Tasks[0].DatabaseNames = 'db1'
+
+        $testNewInputFile | ConvertTo-Json -Depth 7 |
+        Out-File @testOutParams
+
+        .$testScript @testParams
+
+        Should -Invoke Invoke-Command -Times 1 -Exactly -ParameterFilter {
+            ($ComputerName -eq $env:COMPUTERNAME) -and
+            ($FilePath -eq $testParams.SqlScript) -and
+            ($EnableNetworkAccess) -and
+            ($ErrorAction -eq 'Stop') -and
+            ($ArgumentList[0] -eq $testNewInputFile.Tasks[0].ComputerNames) -and
+            ($ArgumentList[1] -eq $testNewInputFile.Tasks[0].DatabaseNames) -and
+            ($ArgumentList[2][0] -eq $testData.sqlFile[0].Content) -and
+            ($ArgumentList[2][1] -eq $testData.sqlFile[1].Content) -and
+            ($ArgumentList[3][0] -eq $testData.sqlFile[0].Path) -and
+            ($ArgumentList[3][1] -eq $testData.sqlFile[1].Path)
+        }
+
+        Should -Invoke Invoke-Command -Times 1 -Exactly
+    }
+    It 'once for each computer name and each database name' {
+        $testNewInputFile = Copy-ObjectHC $testInputFile
+        $testNewInputFile.Tasks[0].ComputerNames = @('PC1', 'PC2')
+        $testNewInputFile.Tasks[0].DatabaseNames = @('db1', 'db2')
+
+        $testNewInputFile | ConvertTo-Json -Depth 7 |
+        Out-File @testOutParams
+
+        .$testScript @testParams
+
+        foreach (
+            $testComputer in
+            $testNewInputFile.Tasks[0].ComputerNames
+        ) {
+            foreach (
+                $testDatabase in
+                $testNewInputFile.Tasks[0].DatabaseNames
+            ) {
+                Should -Invoke Invoke-Command -Times 1 -Exactly -ParameterFilter {
+                    ($ComputerName -eq $env:COMPUTERNAME) -and
+                    ($FilePath -eq $testParams.SqlScript) -and
+                    ($EnableNetworkAccess) -and
+                    ($ErrorAction -eq 'Stop') -and
+                    ($ArgumentList[0] -eq $testComputer) -and
+                    ($ArgumentList[1] -eq $testDatabase) -and
+                    ($ArgumentList[2][0] -eq $testData.sqlFile[0].Content) -and
+                    ($ArgumentList[2][1] -eq $testData.sqlFile[1].Content) -and
+                    ($ArgumentList[3][0] -eq $testData.sqlFile[0].Path) -and
+                    ($ArgumentList[3][1] -eq $testData.sqlFile[1].Path)
+                }
+            }
+        }
+
+        Should -Invoke Invoke-Command -Times 4 -Exactly
+    }
+} -Tag test
 Describe 'when a query is slow and MaxConcurrentTasks is 6' {
     BeforeAll {
         @{
@@ -220,7 +288,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    SqlFiles     = $testSqlFiles
+                    SqlFiles     = $testData.sqlFile.Path
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -468,7 +536,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    SqlFiles     = $testSqlFiles
+                    SqlFiles     = $testData.sqlFile.Path
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -715,7 +783,7 @@ Describe 'when a job fails' {
                 @{
                     ComputerName = @('PC1')
                     DatabaseName = @('a')
-                    SqlFiles     = $testSqlFiles
+                    SqlFiles     = $testData.sqlFile.Path
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -724,7 +792,7 @@ Describe 'when a job fails' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                SqlFiles     = $testSqlFiles.Count
+                SqlFiles     = $testData.sqlFile.Path.Count
                 Error        = "'PC1\a' job error 'oops'"
             }
         )

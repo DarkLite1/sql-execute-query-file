@@ -91,7 +91,7 @@ Begin {
         #region Test .json file properties
         try {
             @(
-                'MaxConcurrentJobs', 'Tasks', 'MailTo'
+                'MaxConcurrentTasks', 'Tasks', 'MailTo'
             ).where(
                 { -not $file.$_ }
             ).foreach(
@@ -99,7 +99,7 @@ Begin {
             )
 
             try {
-                $null = [int]$MaxConcurrentJobs = $file.MaxConcurrentTasks
+                $null = [int]$MaxConcurrentTasks = $file.MaxConcurrentTasks
             }
             catch {
                 throw "Property 'MaxConcurrentTasks' needs to be a number, the value '$($file.MaxConcurrentTasks)' is not supported."
@@ -137,7 +137,7 @@ Begin {
                 $fileContent = Get-Content -LiteralPath $file -Raw -EA Stop
 
                 if (-not $fileContent) {
-                    throw "No file content in query file '$file'"
+                    throw "No file content in SQL file '$file'"
                 }
 
                 $fileContent
@@ -157,7 +157,7 @@ Begin {
                 foreach ($databaseName in $task.DatabaseNames) {
                     [PSCustomObject]@{
                         ComputerName = $computerName.ToUpper()
-                        Database     = $databaseName.ToUpper()
+                        DatabaseName = $databaseName.ToUpper()
                         SqlFile      = @{
                             Paths    = @($task.SqlFiles)
                             Contents = @($filesContent)
@@ -188,7 +188,7 @@ Process {
                 $task = $_
 
                 #region Declare variables for code running in parallel
-                if (-not $MaxConcurrentJobs) {
+                if (-not $MaxConcurrentTasks) {
                     $sqlScriptPath = $using:sqlScriptPath
                     $PSSessionConfiguration = $using:PSSessionConfiguration
                     $EventVerboseParams = $using:EventVerboseParams
@@ -201,8 +201,7 @@ Process {
                 $invokeParams = @{
                     ComputerName        = $env:COMPUTERNAME
                     FilePath            = $sqlScriptPath
-                    ArgumentList        = $task.ComputerName, $task.Database,
-                    $task.SqlFile.Contents, $task.SqlFile.Paths
+                    ArgumentList        = $task.ComputerName, $task.DatabaseName, $task.SqlFile.Contents, $task.SqlFile.Paths
                     EnableNetworkAccess = $true
                     ErrorAction         = 'Stop'
                 }
@@ -253,7 +252,7 @@ Process {
         }
 
         #region Run code serial or parallel
-        $foreachParams = if ($MaxConcurrentJobs -eq 1) {
+        $foreachParams = if ($MaxConcurrentTasks -eq 1) {
             @{
                 Process = $scriptBlock
             }
@@ -261,7 +260,7 @@ Process {
         else {
             @{
                 Parallel      = $scriptBlock
-                ThrottleLimit = $MaxConcurrentJobs
+                ThrottleLimit = $MaxConcurrentTasks
             }
         }
 
