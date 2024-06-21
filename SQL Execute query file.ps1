@@ -263,7 +263,7 @@ Process {
                 #endregion
 
                 #region Verbose
-                $M = "Results on '{0}\{1}' for {2} .SQL files. Results: {3}" -f
+                $M = "Results on '{0}\{1}' for {2} .SQL files: {3}" -f
                 $invokeParams.ArgumentList[0],
                 $invokeParams.ArgumentList[1],
                 $invokeParams.ArgumentList[3].Count,
@@ -285,6 +285,12 @@ Process {
                 #endregion
             }
             catch {
+                $M = "Error on '{0}\{1}' {2} .SQL files: $_" -f
+                $invokeParams.ArgumentList[0],
+                $invokeParams.ArgumentList[1],
+                $invokeParams.ArgumentList[3].Count
+                Write-Warning $M; Write-EventLog @EventErrorParams -Message $M
+
                 $task.Job.Errors += $_
                 $Error.RemoveAt(0)
             }
