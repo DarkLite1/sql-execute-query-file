@@ -1,32 +1,43 @@
-#Requires -Version 5.1
+#Requires -Version 7
 #Requires -Modules Pester, ImportExcel
 
 BeforeAll {
-    $realStartJobCommand = Get-Command Start-Job
-
     $testOutParams = @{
         FilePath = (New-Item "TestDrive:/params.json" -ItemType File).FullName
         Encoding = 'utf8'
     }
 
-    $testQueryPaths = @(
+    $testSqlFiles = @(
         (New-Item 'TestDrive:/query1.sql' -ItemType File).FullName,
         (New-Item 'TestDrive:/query2.sql' -ItemType File).FullName
     )
-    $testQueryPaths | ForEach-Object {
-        "SELECT * `r`nFROM MyTable`r`nWHERE X = 1" | Out-File -FilePath $_
+    $testSqlFiles | ForEach-Object {
+        "-- SQL instructions" | Out-File -FilePath $_
+    }
+
+    $testInputFile = @{
+        MailTo            = 'bob@contoso.com'
+        MaxConcurrentJobs = 1
+        Tasks             = @(
+            @{
+                ComputerNames = @('PC1')
+                DatabaseNames = @('db1')
+                SqlFiles      = $testSqlFiles
+            }
+        )
     }
 
     $testScript = $PSCommandPath.Replace('.Tests.ps1', '.ps1')
     $testParams = @{
         ScriptName = 'Test (Brecht)'
         ImportFile = $testOutParams.FilePath
+        SqlScript  = (New-Item 'TestDrive:/s.ps1' -ItemType File).FullName
         LogFolder  = New-Item 'TestDrive:/log' -ItemType Directory
     }
 
     Mock Invoke-Sqlcmd
+    Mock Invoke-Command
     Mock Send-MailHC
-    Mock Start-Job { & $realStartJobCommand -Scriptblock { 1 } }
     Mock Write-EventLog
 }
 Describe 'the mandatory parameters are' {
@@ -43,7 +54,7 @@ Describe 'send an e-mail to the admin when' {
         }
     }
     It 'the log folder cannot be created' {
-        $testNewParams = $testParams.clone()
+        $testNewParams = Copy-ObjectHC $testParams
         $testNewParams.LogFolder = 'xxx:://notExistingLocation'
 
         .$testScript @testNewParams
@@ -53,9 +64,25 @@ Describe 'send an e-mail to the admin when' {
             ($Message -like '*Failed creating the log folder*')
         }
     }
+    It 'the file SqlScript cannot be found' {
+        $testNewParams = Copy-ObjectHC $testParams
+        $testNewParams.SqlScript = 'c:\upDoesNotExist.ps1'
+
+        $testInputFile | ConvertTo-Json -Depth 7 |
+        Out-File @testOutParams
+
+        .$testScript @testNewParams
+
+        Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
+                (&$MailAdminParams) -and ($Message -like "*SQL script with path '$($testNewParams.SqlScript)' not found*")
+        }
+        Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
+            $EntryType -eq 'Error'
+        }
+    }
     Context 'the ImportFile' {
         It 'is not found' {
-            $testNewParams = $testParams.clone()
+            $testNewParams = Copy-ObjectHC $testParams
             $testNewParams.ImportFile = 'nonExisting.json'
 
             .$testScript @testNewParams
@@ -68,170 +95,82 @@ Describe 'send an e-mail to the admin when' {
             }
         }
         Context 'property' {
-            It 'MailTo is missing' {
-                @{
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = @('PC1')
-                            DatabaseName = @('TicketSystem', 'TicketSystemBackup')
-                            SqlFiles     = $testQueryPaths
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
+            It '<_> not found' -ForEach @(
+                'MaxConcurrentJobs', 'Tasks', 'MailTo'
+            ) {
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.$_ = $null
+
+                $testNewInputFile | ConvertTo-Json -Depth 7 |
+                Out-File @testOutParams
 
                 .$testScript @testParams
 
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*Property 'MailTo' is missing*")
+                    (&$MailAdminParams) -and
+                    ($Message -like "*$ImportFile*Property '$_' not found*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'Tasks is missing' {
-                @{
-                    MaxConcurrentTasks = 1
-                    MailTo             = 'bob@contoso.com'
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
+            It 'Tasks.<_> not found' -ForEach @(
+                'ComputerNames', 'DatabaseNames', 'SqlFiles'
+            ) {
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.Tasks[0].$_ = $null
+
+                $testNewInputFile | ConvertTo-Json -Depth 7 |
+                Out-File @testOutParams
 
                 .$testScript @testParams
 
                 Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'Tasks' found*")
+                    (&$MailAdminParams) -and
+                    ($Message -like "*$ImportFile*Property 'Tasks.$_' not found*")
                 }
                 Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                     $EntryType -eq 'Error'
                 }
             }
-            It 'ComputerName is missing' {
-                @{
-                    MailTo             = 'bob@contoso.com'
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = $null
-                            DatabaseName = @('TicketSystem', 'TicketSystemBackup')
-                            SqlFiles     = $testQueryPaths
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
+            Context 'SqlFiles' {
+                It 'path not found' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Tasks[0].SqlFiles = @('notExisting.sql')
 
-                .$testScript @testParams
+                    $testNewInputFile | ConvertTo-Json -Depth 7 |
+                    Out-File @testOutParams
 
-                Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'ComputerName' found*")
-                }
-                Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
-                    $EntryType -eq 'Error'
-                }
-            }
-            It 'DatabaseName is missing' {
-                @{
-                    MailTo             = 'bob@contoso.com'
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = @('PC1', 'PC2')
-                            DatabaseName = @()
-                            SqlFiles     = $testQueryPaths
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-
-                .$testScript @testParams
-
-                Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'DatabaseName' found*")
-                }
-                Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
-                    $EntryType -eq 'Error'
-                }
-            }
-            It 'SqlFiles is missing' {
-                @{
-                    MailTo             = 'bob@contoso.com'
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = @('PC1', 'PC2')
-                            DatabaseName = @('a')
-                            SqlFiles     = @($null)
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-
-                .$testScript @testParams
-
-                Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*No 'SqlFiles' found*")
-                }
-                Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
-                    $EntryType -eq 'Error'
-                }
-            }
-            It 'SqlFiles path not found' {
-                @{
-                    MailTo             = 'bob@contoso.com'
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = @('PC1', 'PC2')
-                            DatabaseName = @('a')
-                            SqlFiles     = @('xx/xx')
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-
-                .$testScript @testParams
-
-                Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file 'xx/xx' not found for the task on 'PC1 PC2'*")
-                }
-                Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
-                    $EntryType -eq 'Error'
-                }
-            }
-            It 'SqlFiles path not of extension .sql' {
-                $testFileInvalid = (New-Item 'TestDrive:/query.xxx' -ItemType File).FullName
-                @{
-                    MailTo             = 'bob@contoso.com'
-                    MaxConcurrentTasks = 1
-                    Tasks              = @(
-                        @{
-                            ComputerName = @('PC1', 'PC2')
-                            DatabaseName = @('a')
-                            SqlFiles     = @($testFileInvalid)
-                        }
-                    )
-                } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
-
-                .$testScript @testParams
-
-                Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*Query file '$testFileInvalid' is not supported, only the extension '.sql' is supported*")
-                }
-                Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
-                    $EntryType -eq 'Error'
-                }
-            }
-            Context 'MaxConcurrentTasks' {
-                It 'is missing' {
-                    @{
-                        MailTo = @('bob@contoso.com')
-                        # MaxConcurrentTasks = 1
-                    } | ConvertTo-Json | Out-File @testOutParams
 
                     .$testScript @testParams
 
                     Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
-                        (&$MailAdminParams) -and
-                        ($Message -like "*$ImportFile*Property 'MaxConcurrentTasks' not found*")
+                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*SQL file 'notExisting.sql' not found*")
                     }
                     Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
                         $EntryType -eq 'Error'
                     }
                 }
+                It 'SqlFiles path not of extension .sql' {
+                    $testNewInputFile = Copy-ObjectHC $testInputFile
+                    $testNewInputFile.Tasks[0].SqlFiles = @((
+                            New-Item 'TestDrive:/a.txt' -ItemType File).FullName
+                    )
+
+                    $testNewInputFile | ConvertTo-Json -Depth 7 |
+                    Out-File @testOutParams
+
+                    .$testScript @testParams
+
+                    Should -Invoke Send-MailHC -Exactly 1 -ParameterFilter {
+                    (&$MailAdminParams) -and ($Message -like "*$ImportFile*SQL file '$($testNewInputFile.Tasks[0].SqlFiles)' needs to have extension '.sql'*")
+                    }
+                    Should -Invoke Write-EventLog -Exactly 1 -ParameterFilter {
+                        $EntryType -eq 'Error'
+                    }
+                }
+            }
+            Context 'MaxConcurrentTasks' {
                 It 'is not a number' {
                     @{
                         MailTo             = @('bob@contoso.com')
@@ -248,7 +187,7 @@ Describe 'send an e-mail to the admin when' {
                         $EntryType -eq 'Error'
                     }
                 }
-            }
+            } -Tag test
         }
     }
     It 'a .SQL file is empty' {
@@ -281,7 +220,7 @@ Describe 'when a query is slow and MaxConcurrentTasks is 6' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    SqlFiles     = $testQueryPaths
+                    SqlFiles     = $testSqlFiles
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -529,7 +468,7 @@ Describe 'when all queries are fast and MaxConcurrentTasks is 1' {
                 @{
                     ComputerName = @('PC1', 'PC2')
                     DatabaseName = @('a', 'b')
-                    SqlFiles     = $testQueryPaths
+                    SqlFiles     = $testSqlFiles
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -776,7 +715,7 @@ Describe 'when a job fails' {
                 @{
                     ComputerName = @('PC1')
                     DatabaseName = @('a')
-                    SqlFiles     = $testQueryPaths
+                    SqlFiles     = $testSqlFiles
                 }
             )
         } | ConvertTo-Json -Depth 3 | Out-File @testOutParams
@@ -785,7 +724,7 @@ Describe 'when a job fails' {
             [PSCustomObject]@{
                 ComputerName = 'PC1'
                 DatabaseName = 'a'
-                SqlFiles     = $testQueryPaths.Count
+                SqlFiles     = $testSqlFiles.Count
                 Error        = "'PC1\a' job error 'oops'"
             }
         )

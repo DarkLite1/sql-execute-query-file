@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 7
 #Requires -Modules SqlServer, ImportExcel
 #Requires -Modules Toolbox.HTML, Toolbox.EventLog
 
@@ -38,6 +38,7 @@ Param (
     [String]$ScriptName,
     [Parameter(Mandatory)]
     [String]$ImportFile,
+    [String]$SqlScript = "$PSScriptRoot\Start SQL query.ps1",
     [String]$LogFolder = "$env:POWERSHELL_LOG_FOLDER\Application specific\SQL\$ScriptName",
     [String[]]$ScriptAdmin = $env:POWERSHELL_SCRIPT_ADMIN
 )
@@ -67,6 +68,19 @@ Begin {
         }
         #endregion
 
+        #region Test script path exists
+        try {
+            $params = @{
+                Path        = $SqlScript
+                ErrorAction = 'Stop'
+            }
+            $sqlScriptPath = (Get-Item @params).FullName
+        }
+        catch {
+            throw "SQL script with path '$($SqlScript)' not found"
+        }
+        #endregion
+
         #region Import .json file
         $M = "Import .json file '$ImportFile'"
         Write-Verbose $M; Write-EventLog @EventOutParams -Message $M
@@ -75,62 +89,45 @@ Begin {
         #endregion
 
         #region Test .json file properties
-        if (-not ($MailTo = $file.MailTo)) {
-            throw "Input file '$ImportFile': Property 'MailTo' is missing"
-        }
-
-        if (-not ($MaxConcurrentJobs = $file.MaxConcurrentTasks)) {
-            throw "Input file '$ImportFile': Property 'MaxConcurrentTasks' not found."
-        }
-
         try {
-            $null = [int]$file.MaxConcurrentTasks
+            @(
+                'MaxConcurrentJobs', 'Tasks', 'MailTo'
+            ).where(
+                { -not $file.$_ }
+            ).foreach(
+                { throw "Property '$_' not found" }
+            )
+
+            try {
+                $null = [int]$MaxConcurrentJobs = $file.MaxConcurrentTasks
+            }
+            catch {
+                throw "Property 'MaxConcurrentTasks' needs to be a number, the value '$($file.MaxConcurrentTasks)' is not supported."
+            }
+
+            $Tasks = $file.Tasks
+
+            foreach ($task in $Tasks) {
+                @(
+                    'ComputerNames', 'DatabaseNames', 'SqlFiles'
+                ).where(
+                    { -not $task.$_ }
+                ).foreach(
+                    { throw "Property 'Tasks.$_' not found" }
+                )
+
+                foreach ($file in $task.SqlFiles) {
+                    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                        throw "SQL file '$file' not found."
+                    }
+                    if ($file -notMatch '.sql$') {
+                        throw "SQL file '$file' needs to have extension '.sql'."
+                    }
+                }
+            }
         }
         catch {
-            throw "Input file '$ImportFile': Property 'MaxConcurrentTasks' needs to be a number, the value '$($file.MaxConcurrentTasks)' is not supported."
-        }
-
-        #region Tasks
-        if (-not ($Tasks = $file.Tasks)) {
-            throw "Input file '$ImportFile': No 'Tasks' found."
-        }
-
-        foreach ($task in $Tasks) {
-            if (-not $task.ComputerName) {
-                throw "Input file '$ImportFile': No 'ComputerName' found in one of the 'Tasks'."
-            }
-
-            if (-not $task.DatabaseName) {
-                throw "Input file '$ImportFile': No 'DatabaseName' found for the task on '$($task.ComputerName)'."
-            }
-
-            if (-not $task.SqlFiles) {
-                throw "Input file '$ImportFile': No 'SqlFiles' found for the task on '$($task.ComputerName)'."
-            }
-
-            foreach ($q in $task.SqlFiles) {
-                if (-not (Test-Path -LiteralPath $q -PathType Leaf)) {
-                    throw "Input file '$ImportFile': Query file '$q' not found for the task on '$($task.ComputerName)'."
-                }
-                if ($q -notMatch '.sql$') {
-                    throw "Input file '$ImportFile': Query file '$q' is not supported, only the extension '.sql' is supported."
-                }
-            }
-        }
-        #endregion
-        #endregion
-
-        #region Convert .json file
-        foreach ($task in $Tasks) {
-            #region Set ComputerName if there is none
-            if (
-                (-not $task.ComputerName) -or
-                ($task.ComputerName -eq 'localhost') -or
-                ($task.ComputerName -eq "$ENV:COMPUTERNAME.$env:USERDNSDOMAIN")
-            ) {
-                $task.ComputerName = $env:COMPUTERNAME
-            }
-            #endregion
+            throw "Input file '$ImportFile': $_"
         }
         #endregion
 
@@ -146,11 +143,21 @@ Begin {
                 $fileContent
             }
 
-            foreach ($computerName in $task.ComputerName) {
-                foreach ($databaseName in $task.DatabaseName) {
+            foreach ($computerName in $task.ComputerNames) {
+                #region Set ComputerName
+                if (
+                    (-not $computerName) -or
+                    ($computerName -eq 'localhost') -or
+                    ($computerName -eq "$ENV:COMPUTERNAME.$env:USERDNSDOMAIN")
+                ) {
+                    $computerName = $env:COMPUTERNAME
+                }
+                #endregion
+
+                foreach ($databaseName in $task.DatabaseNames) {
                     [PSCustomObject]@{
-                        ComputerName = $computerName
-                        Database     = $databaseName
+                        ComputerName = $computerName.ToUpper()
+                        Database     = $databaseName.ToUpper()
                         SqlFile      = @{
                             Paths    = @($task.SqlFiles)
                             Contents = @($filesContent)
@@ -176,66 +183,13 @@ Begin {
 
 Process {
     Try {
-        $sqlScriptBlock = {
-            Param (
-                [Parameter(Mandatory)]
-                [String]$ComputerName,
-                [Parameter(Mandatory)]
-                [String]$DatabaseName,
-                [Parameter(Mandatory)]
-                [String[]]$SqlFileContents,
-                [Parameter(Mandatory)]
-                [String[]]$SqlFilePaths
-            )
-
-            $i = 0
-            foreach ($fileContent in $SqlFileContents) {
-                try {
-                    $result = [PSCustomObject]@{
-                        ComputerName = $ComputerName
-                        DatabaseName = $DatabaseName
-                        SqlFile      = $SqlFilePaths[$i]
-                        StartTime    = Get-Date
-                        EndTime      = $null
-                        Executed     = $false
-                        Error        = $null
-                        Output       = @()
-                    }
-
-                    $result.StartTime = Get-Date
-
-                    $params = @{
-                        ServerInstance         = $ComputerName
-                        Database               = $DatabaseName
-                        Query                  = $fileContent
-                        TrustServerCertificate = $true
-                        QueryTimeout           = '1000'
-                        ConnectionTimeout      = '20'
-                        ErrorAction            = 'Stop'
-                    }
-                    $result.Output += Invoke-Sqlcmd @params
-                    $result.Executed = $true
-                }
-                catch {
-                    $result.Error = $_
-                    $error.RemoveAt(0)
-                }
-                finally {
-                    $result.EndTime = Get-Date
-
-                    $i++
-                    $result
-                }
-            }
-        }
-
         $scriptBlock = {
             try {
                 $task = $_
 
                 #region Declare variables for code running in parallel
                 if (-not $MaxConcurrentJobs) {
-                    $sqlScriptBlock = $using:sqlScriptBlock
+                    $sqlScriptPath = $using:sqlScriptPath
                     $PSSessionConfiguration = $using:PSSessionConfiguration
                     $EventVerboseParams = $using:EventVerboseParams
                     $EventErrorParams = $using:EventErrorParams
@@ -245,10 +199,12 @@ Process {
 
                 #region Create job parameters
                 $invokeParams = @{
-                    ScriptBlock  = $sqlScriptBlock
-                    ArgumentList = $task.ComputerName, $task.Database,
+                    ComputerName        = $env:COMPUTERNAME
+                    FilePath            = $sqlScriptPath
+                    ArgumentList        = $task.ComputerName, $task.Database,
                     $task.SqlFile.Contents, $task.SqlFile.Paths
-                    ErrorAction  = 'Stop'
+                    EnableNetworkAccess = $true
+                    ErrorAction         = 'Stop'
                 }
 
                 $M = "Execute on '{0}\{1}' {2} .SQL files" -f
