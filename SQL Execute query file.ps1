@@ -399,8 +399,8 @@ End {
         #region Mail subject and priority
         $mailParams.Priority = 'Normal'
 
-        $mailParams.Subject = '{0} job{1}' -f $counter.sqlFiles, $(
-            if ($counter.sqlFiles -ne 1) { 's' }
+        $mailParams.Subject = '{0} {1}' -f $counter.sqlFiles, $(
+            if ($counter.sqlFiles -ne 1) { 'queries' } else { 'query' }
         )
 
         if (
@@ -409,16 +409,17 @@ End {
         ) {
             $mailParams.Priority = 'High'
             $mailParams.Subject += ", $totalErrorCount error{0}" -f $(
-                if ($totalErrorCount -gt 1) { 's' }
+                if ($totalErrorCount -ne 1) { 's' }
             )
         }
         #endregion
 
         #region Create error html lists
         $systemErrorsHtmlList = if ($counter.systemErrors) {
-            "<p>Detected <b>{0} non terminating error{1}:{2}</p>" -f $counter.systemErrors,
+            "<p>Detected <b>{0} non terminating error{1}:{2}</p>" -f
+            $counter.systemErrors,
             $(
-                if ($counter.systemErrors -gt 1) { 's' }
+                if ($counter.systemErrors -ne 1) { 's' }
             ),
             $(
                 $Error.Exception.Message | Where-Object { $_ } |
@@ -442,15 +443,20 @@ End {
                 <th>Not executed queries</th>
                 <td>$($counter.sqlFiles - $counter.sqlFilesExecuted)</td>
             </tr>
-            <tr>
+            <tr{0}>
                 <th>Failed queries</th>
                 <td>$($counter.executionErrors)</td>
             </tr>
-            {0}
+            {1}
         </table>
         " -f $(
+            if ($counter.executionErrors) {
+                ' style="background-color: red"'
+            }
+        ),
+        $(
             if ($counter.JobErrors) {
-                "<tr>
+                "<tr style=`"background-color: red`">
                     <th>Job errors</th>
                     <td>$($counter.JobErrors)</td>
                 </tr>"
