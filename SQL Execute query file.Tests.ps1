@@ -45,7 +45,6 @@ BeforeAll {
         ScriptAdmin = '007@contoso.com'
     }
 
-    Mock Invoke-Sqlcmd
     Mock Invoke-Command
     Mock Send-MailHC
     Mock Write-EventLog

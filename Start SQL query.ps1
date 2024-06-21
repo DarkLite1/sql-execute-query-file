@@ -1,4 +1,7 @@
-﻿Param (
+﻿#Requires -Version 7
+#Requires -Modules SqlServer
+
+Param (
     [Parameter(Mandatory)]
     [String]$ComputerName,
     [Parameter(Mandatory)]
