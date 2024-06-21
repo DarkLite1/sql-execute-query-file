@@ -105,6 +105,7 @@ Begin {
                 throw "Property 'MaxConcurrentTasks' needs to be a number, the value '$($file.MaxConcurrentTasks)' is not supported."
             }
 
+            $MailTo = $file.MailTo
             $Tasks = $file.Tasks
 
             foreach ($task in $Tasks) {
@@ -299,11 +300,14 @@ End {
             @{
                 Name       = 'Duration'
                 Expression = {
-                    '{0:hh}:{0:mm}:{0:ss}:{0:fff}' -f
-                    (New-TimeSpan -Start $_.StartTime -End $_.EndTime)
+                    New-TimeSpan -Start $_.StartTime -End $_.EndTime
                 }
             },
-            'SqlFile', 'Output', 'Error' |
+            'Executed', 'SqlFile',
+            @{
+                Name       = 'Output'
+                Expression = { $_.Output -join ', ' }
+            }, 'Error' |
             Export-Excel @excelParams
 
             $mailParams.Attachments = $excelParams.Path
