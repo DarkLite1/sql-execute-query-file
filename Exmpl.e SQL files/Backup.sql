@@ -1,0 +1,1 @@
+USE MASTER EXECUTE dbo.DatabaseBackup @Databases = 'MyDB', @Directory = 'C:\\backups\\MyDB', @backupType = 'FULL', @CopyOnly = 'Y', @CleanupTime = 1, @CleanupMode = 'AFTER_BACKUP'
