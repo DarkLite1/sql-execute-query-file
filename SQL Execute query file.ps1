@@ -14,22 +14,34 @@
     simply not executed and marked as 'Executed = false'. Success and the reason
     for failure are reported in an Excel file that is sent by e-mail.
 
+.PARAMETER ImportFile
+    A .JSON file that contains all the parameters used by the script.
+
+.PARAMETER SqlScript
+    The script that will execute the SQL code.
+
+.PARAMETER PSSessionConfiguration
+    The version of PowerShell on the remote endpoint as returned by
+    Get-PSSessionConfiguration.
+
 .PARAMETER MaxConcurrentTasks
     How many tasks are allowed to run at the same time.
 
 .PARAMETER Tasks
-    Collection of tasks to executed.
+    Collection of tasks to execute.
 
-.PARAMETER Tasks.ComputerName
-    Computer name where the SQL database is hosted.
+.PARAMETER Tasks.ComputerNames
+    List of computer names where the SQL code needs to be executed.
 
-.PARAMETER Tasks.DatabaseName
-    Name of the database located on the server instance. In case multiple
-    databases need to be addressed use 'MASTER' and the 'USE database x'
-    statement within the .SQL file(s).
+.PARAMETER Tasks.DatabaseNames
+    List of database names or server instances where the SQL code needs to be
+    executed against.
+
+    In case multiple databases need to be addressed use 'MASTER' combined with
+    the 'USE database x' statement within the .SQL files.
 
 .PARAMETER Tasks.SqlFiles
-    The .SQL file containing the SQL statements to execute.
+    The .SQL files containing the SQL statements to execute.
 #>
 
 [CmdLetBinding()]
@@ -39,6 +51,7 @@ Param (
     [Parameter(Mandatory)]
     [String]$ImportFile,
     [String]$SqlScript = "$PSScriptRoot\Start SQL query.ps1",
+    [String]$PSSessionConfiguration = 'PowerShell.7',
     [String]$LogFolder = "$env:POWERSHELL_LOG_FOLDER\Application specific\SQL\$ScriptName",
     [String[]]$ScriptAdmin = $env:POWERSHELL_SCRIPT_ADMIN
 )
@@ -202,6 +215,7 @@ Process {
                 $invokeParams = @{
                     ComputerName        = $env:COMPUTERNAME
                     FilePath            = $sqlScriptPath
+                    ConfigurationName   = $PSSessionConfiguration
                     ArgumentList        = $task.ComputerName, $task.DatabaseName, $task.SqlFile.Contents, $task.SqlFile.Paths
                     EnableNetworkAccess = $true
                     ErrorAction         = 'Stop'
