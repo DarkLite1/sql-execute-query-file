@@ -19,4 +19,4 @@ RESTORE DATABASE DataBaseName FROM DISK = 'Z:\Backup.bak' WITH REPLACE
 GO
 
 -- remove mapped drive
-EXEC xp_cmdshell 'net use H: /delete'
+EXEC xp_cmdshell 'net use Z: /delete'
