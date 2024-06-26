@@ -62,10 +62,6 @@ Begin {
         Write-EventLog @EventStartParams
         Get-ScriptRuntimeHC -Start
 
-        $error.Clear()
-
-        Get-Job | Remove-Job -Force -EA Ignore
-
         #region Logging
         try {
             $LogParams = @{

@@ -281,6 +281,8 @@ Describe 'execute the SQL script with Invoke-Command' {
 }
 Describe 'on a successful run' {
     BeforeAll {
+        $Error.Clear()
+
         $testData.ScriptOutput = @(
             [PSCustomObject]@{
                 ComputerName = 'PC1'
